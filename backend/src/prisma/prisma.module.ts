@@ -5,7 +5,7 @@ import { Module } from '@nestjs/common';
 @Module({
     imports: [],
     controllers: [],
-    providers: [
-        PrismaService,],
+    providers: [PrismaService,],
+    exports: [PrismaService]
 })
 export class PrismaModule { }
