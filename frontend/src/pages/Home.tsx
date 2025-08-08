@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Copy, ArrowRight, CheckCircle, Link2, Shield, AlertCircle } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
 
 // shadcn/ui components
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 import { useCreateUrl } from '@/hooks/useUrl';
+import Nav from '@/components/Nav';
 
 // Animation variants
 const fadeIn = {
@@ -30,12 +31,12 @@ const staggerContainer = {
 };
 
 export default function Home() {
-	const navigate = useNavigate();
 	const { createUrl, isLoading, error, clearError } = useCreateUrl();
 	const [err, setErr] = useState<string | null>(null);
 	const [originalUrl, setOriginalUrl] = useState('');
 	const [shortenedUrl, setShortenedUrl] = useState('');
 	const [copied, setCopied] = useState(false);
+	const { isAuthenticated, user, logout } = useAuth();
 
 	const handleUrlChange = (url: string) => {
 	setOriginalUrl(url);
@@ -43,7 +44,7 @@ export default function Home() {
 	setCopied(false);
 	};
 
-  const shortenUrl = async () => {
+	const shortenUrl = async () => {
 		const result = await createUrl(originalUrl);
 		if (result) {
 			setShortenedUrl(result.shortenedUrl);
@@ -54,7 +55,7 @@ export default function Home() {
 				setErr(error);
 			}
 		}
-  };
+	};
 
 	const copyToClipboard = () => {
 		navigator.clipboard.writeText(shortenedUrl);
@@ -62,34 +63,19 @@ export default function Home() {
 		setTimeout(() => setCopied(false), 2000);
 	};
 
+	const handleLogout = async () => {
+		logout().then(() => {
+			setOriginalUrl('');
+			setShortenedUrl('');
+			setCopied(false);
+			setErr(null);
+		});
+	}
+
 	return (
 		<div className="flex flex-col min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
 
-			<header className="border-b bg-white/50 backdrop-blur-sm sticky top-0 z-50">
-				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-					<div className="flex justify-between items-center h-16">
-						<motion.div 
-							initial={{ opacity: 0, x: -20 }}
-							animate={{ opacity: 1, x: 0 }}
-							className="flex items-center space-x-3"
-						>
-							<div className="h-10 w-10 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 flex items-center justify-center">
-								<Link2 size={20} className="text-white" />
-							</div>
-							<div>
-								<h1 className="text-xl font-bold text-gray-900">Compactify</h1>
-								<p className="text-xs text-gray-500">Fast & Secure</p>
-							</div>
-						</motion.div>
-
-						<nav className="flex items-center space-x-3">
-							<Button onClick={() => navigate('/auth')} size="sm">
-								Sign In
-							</Button>
-						</nav>
-					</div>
-				</div>
-			</header>
+			<Nav isAuthenticated={isAuthenticated} user={user} handleLogout={handleLogout} />
 
 			<main className="flex-grow">
 				<div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-20">
