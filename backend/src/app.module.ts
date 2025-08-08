@@ -1,11 +1,28 @@
+import { UrlModule } from './url/url.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { Module } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { PrismaService } from './prisma/prisma.service';
 
 @Module({
   imports: [
-        PrismaModule,
+    UrlModule,
+    PrismaModule,
+    ScheduleModule.forRoot(),
+    ThrottlerModule.forRoot({
+      throttlers: [
+        {
+          ttl: 60000,
+          limit: 10,
+        },
       ],
+    }),
+  ],
   controllers: [],
-  providers: [],
+  providers: [
+    PrismaService,
+  ],
+  exports: [PrismaService],
 })
-export class AppModule {}
+export class AppModule { }
