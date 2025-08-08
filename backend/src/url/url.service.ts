@@ -4,6 +4,7 @@ import * as base62 from 'base62';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateUrlDto } from './dto/create-url.dto';
+import { CreateAuthUrlDto } from './dto/create-auth-url.dto';
 
 
 @Injectable()
@@ -51,16 +52,11 @@ export class UrlService {
 
 	async createAnonymousUrl(url: CreateUrlDto) {
 		try {
-			const { originalUrl, expiresAt } = url;
+			const { originalUrl } = url;
 
 			if (!originalUrl || !this.isValidUrl(originalUrl)) {
-				this.logger.error('Invalid URL provided');
+				// this.logger.error('Invalid URL provided');
 				throw new BadRequestException('Invalid URL provided');
-			}
-	
-			if (expiresAt && new Date(expiresAt) <= new Date()) {
-				this.logger.error('Expiration date must be in the future');
-				throw new BadRequestException('Expiration date must be in the future');
 			}
 	
 			let shortCode = this.generateShortCode(originalUrl);
@@ -68,7 +64,7 @@ export class UrlService {
 				shortCode = this.generateShortCode(originalUrl + Math.random().toString(36).substring(2, 7));
 			}
 	
-			let expiresAtDate = expiresAt ? new Date(expiresAt) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+			const expiresAtDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 	
 			const urlData = await this.prisma.url.create({
 				data: {
@@ -110,6 +106,68 @@ export class UrlService {
 			if (error instanceof NotFoundException)
 				throw new NotFoundException('URL not found');
 			throw new BadRequestException('Error retrieving URL');
+		}
+	}
+
+	async createAuthUrl(url: CreateAuthUrlDto) {
+		try {
+			const { originalUrl, expiresAt, uid } = url;
+
+			if (!originalUrl || !this.isValidUrl(originalUrl)) {
+				throw new BadRequestException('Invalid URL provided');
+			}
+
+			if (expiresAt && new Date(expiresAt) <= new Date()) {
+				// this.logger.error('Expiration date must be in the future');
+				throw new BadRequestException('Expiration date must be in the future');
+			}
+
+			const user = await this.prisma.user.findUnique({
+				where: { id: uid },
+			});
+
+			if (!uid || !user) {
+				// this.logger.error('User not found');
+				throw new BadRequestException('User not found');
+			}
+
+			// check number of created URLs by user
+			const userUrlsCount = await this.prisma.url.count({
+				where: { userId: uid },
+			});
+
+			if (userUrlsCount >= 50) {
+				// this.logger.error('User has reached the limit of 100 URLs');
+				throw new BadRequestException('User has reached the limit of 100 URLs');
+			}
+
+			let shortCode = this.generateShortCode(originalUrl);
+			while (await this.checkCollision(shortCode)) {
+				shortCode = this.generateShortCode(originalUrl + Math.random().toString(36).substring(2, 7));
+			}
+
+			const expiresAtDate = expiresAt ? new Date(expiresAt) : null;
+
+			const urlData = await this.prisma.url.create({
+				data: {
+					originalUrl,
+					shortCode,
+					expiresAt: expiresAtDate,
+					userId: user.id,
+				},
+			});
+
+			const shortenedUrl = `${process.env.BACKEND_URL}/url/${shortCode}`;
+
+			const response = {
+				originalUrl: urlData.originalUrl,
+				shortenedUrl: shortenedUrl,
+				expiresAt: urlData.expiresAt,
+			};
+
+			return response;
+		} catch (error) {
+			throw new BadRequestException(error.message || 'Error creating URL');
 		}
 	}
 }

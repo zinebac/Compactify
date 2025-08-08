@@ -5,8 +5,4 @@ export class CreateUrlDto {
   @IsUrl()
   @IsNotEmpty()
   originalUrl: string;
-
-  @IsOptional()
-  @IsDateString()
-  expiresAt?: string;
 }

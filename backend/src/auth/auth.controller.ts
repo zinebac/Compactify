@@ -223,7 +223,7 @@ export class AuthController {
 						window.opener.postMessage({
 						type: 'OAUTH_ERROR',
 						error: '${error}'
-						}, '${process.env.FRONTEND_URL || 'http://localhost:5173'}');
+						}, '${process.env.FRONTEND_URL}');
 					}
 					setTimeout(() => window.close(), 2000);
 				</script>
