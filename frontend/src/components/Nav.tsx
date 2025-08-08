@@ -258,7 +258,7 @@ const Nav: React.FC<NavProps> = ({
 							<Button 
 								onClick={() => navigate('/auth')} 
 								size="sm"
-								className="gap-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 shadow-sm"
+								className="gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-800 shadow-sm"
 							>
 								<User2 size={16} />
 								Sign In

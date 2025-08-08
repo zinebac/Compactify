@@ -92,7 +92,7 @@ export const Auth: React.FC = () => {
 	];
 
 	return (
-		<div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+		<div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex flex-col">
 			{/* Header */}
 			<header className="border-b bg-white/50 backdrop-blur-sm">
 				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -123,7 +123,7 @@ export const Auth: React.FC = () => {
 			</header>
 
 			{/* Main Content */}
-			<main className="flex-grow flex items-center justify-center px-4 py-8 md:py-12">
+			<main className="flex-1 flex items-center justify-center px-4 py-8 md:py-12">
 				<div className="w-full max-w-6xl">
 					<div className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-center">
 
