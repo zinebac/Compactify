@@ -89,7 +89,7 @@ export class UrlService {
 
 			return response;
 		} catch (error) {
-			throw new Error('Error creating URL');
+			throw new BadRequestException(error.message || 'Error creating URL');
 		}
 	}
 
