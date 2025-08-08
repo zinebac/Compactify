@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Copy, ArrowRight, CheckCircle, Link2, Shield } from 'lucide-react';
+import { Copy, ArrowRight, CheckCircle, Link2, Shield, AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 // shadcn/ui components
@@ -9,6 +9,9 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+
+import { useCreateUrl } from '@/hooks/useUrl';
 
 // Animation variants
 const fadeIn = {
@@ -28,7 +31,8 @@ const staggerContainer = {
 
 export default function Home() {
 	const navigate = useNavigate();
-
+	const { createUrl, isLoading, error, clearError } = useCreateUrl();
+	const [err, setErr] = useState<string | null>(null);
 	const [originalUrl, setOriginalUrl] = useState('');
 	const [shortenedUrl, setShortenedUrl] = useState('');
 	const [copied, setCopied] = useState(false);
@@ -40,7 +44,16 @@ export default function Home() {
 	};
 
   const shortenUrl = async () => {
-
+		const result = await createUrl(originalUrl);
+		if (result) {
+			setShortenedUrl(result.shortenedUrl);
+			clearError();
+		} else {
+			setShortenedUrl('');
+			if (error) {
+				setErr(error);
+			}
+		}
   };
 
 	const copyToClipboard = () => {
@@ -127,16 +140,38 @@ export default function Home() {
 									placeholder="https://example.com/very/long/url/that/needs/shortening"
 									className="h-12 text-base"
 								/>
+
+								{err && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                  >
+                    <Alert variant="destructive">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>{error}</AlertDescription>
+                    </Alert>
+                  </motion.div>
+                )}
 							</div>
 
 							{/* Shorten Button */}
 							<Button
 								onClick={shortenUrl}
+								disabled={isLoading || !originalUrl}
 								size="lg"
 								className="w-full h-12 text-base font-medium"
 							>
-									<ArrowRight size={18} className="mr-2" />
-									Shorten URL
+                  {isLoading ? (
+                    <>
+                      <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full mr-2" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <ArrowRight size={18} className="mr-2" />
+                      Shorten URL
+                    </>
+                  )}
 							</Button>
 
 							{/* Result */}
