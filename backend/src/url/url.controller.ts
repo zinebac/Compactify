@@ -2,7 +2,6 @@ import { BadRequestException, Body, Controller, Delete, Get, Logger, NotFoundExc
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { UrlService } from './url.service';
 import { CreateUrlDto } from './dto/create-url.dto';
-import { CreateAuthUrlDto } from './dto/create-auth-url.dto';
 
 @Controller('url')
 @UseGuards(ThrottlerGuard)
@@ -32,7 +31,7 @@ export class UrlController {
 	}
 
 	@Post('create')
-	async createUrl(@Body() url: CreateAuthUrlDto) {
+	async createUrl(@Body() url: CreateUrlDto) {
 		try {
 			return await this.urlService.createAuthUrl(url);
 		} catch (error) {

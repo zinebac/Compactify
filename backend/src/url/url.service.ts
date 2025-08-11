@@ -4,8 +4,6 @@ import * as base62 from 'base62';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateUrlDto } from './dto/create-url.dto';
-import { CreateAuthUrlDto } from './dto/create-auth-url.dto';
-
 
 @Injectable()
 export class UrlService {
@@ -109,7 +107,7 @@ export class UrlService {
 		}
 	}
 
-	async createAuthUrl(url: CreateAuthUrlDto) {
+	async createAuthUrl(url: CreateUrlDto) {
 		try {
 			const { originalUrl, expiresAt, uid } = url;
 
