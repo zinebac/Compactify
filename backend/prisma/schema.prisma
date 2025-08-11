@@ -36,6 +36,7 @@ model Url {
   shortCode   String    @unique
   createdAt   DateTime  @default(now())
   expiresAt   DateTime?
+  isActive    Boolean   @default(true)
   updatedAt   DateTime  @updatedAt
   clickCount  Int       @default(0)
 
