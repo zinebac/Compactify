@@ -5,7 +5,7 @@ export const useCreateUrl = () => {
 	const [isLoading, setIsLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
-	const createUrl = useCallback(async (originalUrl: string, expiresAt?: string) => {
+	const createUrl = useCallback(async (originalUrl: string, uid?: string, expiresAt?: string) => {
 		setIsLoading(true);
 		setError(null);
 
@@ -27,7 +27,7 @@ export const useCreateUrl = () => {
 			if (!validUrl()) {
 				throw new Error('Invalid URL');
 			}
-			return await apiService.createUrlAnonymous(originalUrl);
+			return await apiService.createUrl(originalUrl, uid, expiresAt);
 		} catch (err) {
 			let errorMessage = 'Failed to create short URL';
 

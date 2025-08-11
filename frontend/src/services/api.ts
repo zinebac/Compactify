@@ -12,11 +12,13 @@ class ApiService {
 		return response.json() as Promise<T>;
 	}
 
-	async createUrlAnonymous(originalUrl: string): Promise<{ shortenedUrl: string; shortCode: string }> {
-		const response = await fetch(`${API_BASE_URL}/url/create-anonymous`, {
+	async createUrl(originalUrl: string, uid?: string , expiresAt?: string): Promise<{ shortenedUrl: string; shortCode: string }> {
+		const endpoint = uid ? 'url/create' : 'url/create-anonymous';
+		console.log(`Sending request to ${endpoint} with originalUrl: ${originalUrl}, expiresAt: ${expiresAt}, uid: ${uid}`);
+		const response = await fetch(`${API_BASE_URL}/${endpoint}`, {
 			method: 'POST',
 			headers: {'Content-Type': 'application/json'},
-			body: JSON.stringify({ originalUrl }),
+			body: JSON.stringify({ originalUrl, expiresAt, uid }),
 		});
 
 		return this.handleResponse<{ shortenedUrl: string; shortCode: string }>(response);
@@ -42,7 +44,7 @@ class ApiService {
 			};
 		} else {
 			localStorage.removeItem('accessToken');
-			console.error('Token refresh failed:', data.message);
+			// console.error('Token refresh failed:', data.message);
 			throw new Error(data.message || 'Token refresh failed');
 		}
 	}
@@ -63,8 +65,8 @@ class ApiService {
 				credentials: 'include',
 			});
 
-			const data = await response.json();
-			console.log('Logout:', data.message);
+			// const data = await response.json();
+			// console.log('Logout:', data.message);
 		} finally {
 			localStorage.removeItem('accessToken');
 		}
