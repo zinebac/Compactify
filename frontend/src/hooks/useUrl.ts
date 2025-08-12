@@ -37,6 +37,7 @@ export const useCreateUrl = () => {
 					errorMessage = 'Please enter a valid URL.';
 				} else {
 					errorMessage = "An error occured please try again later.";
+					// console.error('Error creating URL:', err);
 				}
 			}
 
