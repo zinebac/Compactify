@@ -1,3 +1,4 @@
+import type { DashboardQuery } from "@/types";
 import { authService } from "./auth";
 
 class ApiService {
@@ -14,6 +15,22 @@ class ApiService {
 			body: JSON.stringify(requestBody),
 		});
 	}
+
+	// dashboard methods
+
+	async getDashboardData(query: DashboardQuery): Promise<any> {
+		const params = new URLSearchParams();
+		Object.entries(query).forEach(([key, value]) => {
+			if (value !== undefined && value !== null) {
+				params.append(key, String(value));
+			}
+		})
+		const endpoint = `/url/dashboard?${params}`;
+		return this.auth_service.makeAuthenticatedRequest(endpoint, {
+			method: 'GET',
+		});
+	}
 }
+
 
 export const apiService = new ApiService();

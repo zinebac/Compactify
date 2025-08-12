@@ -53,7 +53,7 @@ export default function Home() {
 	};
 
 	const shortenUrl = async () => {
-		const result = await createUrl(originalUrl, user?.id, expiresAt);
+		const result: any = await createUrl(originalUrl, user?.id, expiresAt);
 		if (result) {
 			setShortenedUrl(result.shortenedUrl);
 			clearError();
