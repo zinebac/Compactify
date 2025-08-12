@@ -185,4 +185,67 @@ export class UrlService {
 			throw new BadRequestException(error.message || 'Error creating URL');
 		}
 	}
+
+	async getDashboard(uid: string, query: {
+		page?: number;
+		limit?: number;
+		sortBy?: 'createdAt' | 'expiresAt' | 'clickCount';
+		sortOrder?: 'asc' | 'desc';
+		filter?: 'active' | 'expired' | 'all';
+		search?: string;
+	}) {
+		const { page = 1, limit = 10, sortBy = 'createdAt', sortOrder = 'desc', filter = 'all', search = '' } = query;
+		const skip = (page - 1) * limit;
+		const where: any = {
+			userId: uid,
+			...(search && {
+				originalUrl: {
+					contains: search,
+					mode: Prisma.QueryMode.insensitive,
+				}
+			})
+		};
+
+		if (filter === 'active') {
+			where.OR = [
+				{ isActive: true }
+			]
+		} else if (filter === 'expired') {
+			where.OR = [
+				{ isActive: false },
+				{ expiresAt: { lte: new Date() } }
+			]
+		}
+
+		const [ursl, totalurls] = await this.prisma.$transaction([
+			this.prisma.url.findMany({
+				where,
+				skip,
+				take: limit,
+				orderBy: {
+					[sortBy]: sortOrder,
+				},
+			}),
+			this.prisma.url.count({ where }),
+		])
+
+		const totalPages = Math.ceil(totalurls / limit);
+		const urls = ursl.map(url => ({
+			shortenedUrl: `${process.env.BACKEND_URL}/url/${url.shortCode}`,
+			originalUrl: url.originalUrl,
+			uid: url.userId,
+			clicks: url.clickCount || 0,
+			expiresAt: url.expiresAt ? url.expiresAt.toISOString() : null,
+			createdAt: url.createdAt.toISOString(),
+		}));
+
+		return {
+			urls,
+			totalPages,
+			currentPage: page,
+			totalUrls: totalurls,
+			limit,
+			totalClicks: urls.reduce((acc, url) => acc + (url.clicks || 0), 0),
+		};
+	}
 }

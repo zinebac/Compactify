@@ -11,5 +11,6 @@ export class CreateUrlDto {
 	expiresAt?: string;
 
 	@IsUUID()
+	@IsOptional()
 	uid?: string;
 }
