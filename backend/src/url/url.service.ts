@@ -4,6 +4,7 @@ import * as base62 from 'base62';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateUrlDto } from './dto/create-url.dto';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class UrlService {
@@ -14,14 +15,30 @@ export class UrlService {
 	async deleteExpiredUrls() {
 		try {
 			const now = new Date();
-			const deletedUrls = await this.prisma.url.deleteMany({
-				where: {
-					expiresAt: {
-						lte: now,
+			const [totalDeleted, totalDeactivated] = await this.prisma.$transaction([
+				this.prisma.url.deleteMany({
+					where: {
+						expiresAt: {
+							lte: now,
+						},
+						userId: null,
 					},
-				},
-			});
-			this.logger.log(`Deleted ${deletedUrls.count} expired URLs.`);
+				}),
+				this.prisma.url.updateMany({
+					where: {
+						expiresAt: {
+							lte: now,
+						},
+						userId: { not: null},
+					},
+					data: {
+						isActive: false,
+					},
+				}),
+
+			]);
+
+			this.logger.log(`Total URLs deleted: ${totalDeleted.count}, Total URLs deactivated: ${totalDeactivated.count}`);
 		} catch (error) {
 			this.logger.error('Error deleting expired URLs', error);
 		}

@@ -88,50 +88,6 @@ export class AuthController {
 	});
 	}
 
-	@Get('status')
-	async getAuthStatus(@Req() req, @Res() res: Response) {
-	try {
-		const refreshToken = req.cookies?.refresh_token;
-		
-		if (!refreshToken) {
-		return res.json({
-			success: true,
-			data: { isAuthenticated: false, user: null }
-		});
-		}
-
-		const user = await this.authService.validateRefreshToken(refreshToken);
-		
-		if (!user) {
-		this.clearRefreshCookie(res);
-		return res.json({
-			success: true,
-			data: { isAuthenticated: false, user: null }
-		});
-		}
-
-		return res.json({
-		success: true,
-		data: {
-			isAuthenticated: true,
-			user: {
-			id: user.id,
-			email: user.email,
-			name: user.name,
-			provider: user.provider,
-			createdAt: user.createdAt,
-			}
-		}
-		});
-
-	} catch (error) {
-		return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-		success: false,
-		message: 'Failed to check auth status'
-		});
-	}
-	}
-
 	private async handleOAuthCallback(req: any, res: Response, provider: 'GOOGLE' | 'GITHUB') {
 		try {
 			if (!req.user?.email || !req.user?.providerId) {
