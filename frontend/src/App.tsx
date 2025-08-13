@@ -4,6 +4,7 @@ import Home from './pages/Home';
 import AuthCallback from './components/AuthCallback';
 import { AuthProvider } from './contexts/AuthContext';
 import { Auth } from './pages/Auth';
+import { Dashboard } from './pages/Dashboard';
 
 function App() {
   return (
@@ -17,6 +18,9 @@ function App() {
             
             {/* Redirect unknown routes to home */}
             <Route path="*" element={<Navigate to="/" replace />} />
+
+            {/* Protected Routes */}
+            <Route path="/dashboard" element={<Dashboard />} />
 
             {/* OAuth Callback Routes */}
             <Route path="/auth/google/callback" element={<AuthCallback />} />
