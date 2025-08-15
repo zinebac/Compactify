@@ -5,6 +5,7 @@ import AuthCallback from './components/AuthCallback';
 import { AuthProvider } from './contexts/AuthContext';
 import { Auth } from './pages/Auth';
 import { Dashboard } from './pages/Dashboard';
+import ProtectedRoute from './components/ProtectedRoute';
 
 function App() {
   return (
@@ -20,7 +21,11 @@ function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
 
             {/* Protected Routes */}
-            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/dashboard" element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            } />
 
             {/* OAuth Callback Routes */}
             <Route path="/auth/google/callback" element={<AuthCallback />} />
