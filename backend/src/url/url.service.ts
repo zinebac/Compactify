@@ -115,6 +115,13 @@ export class UrlService {
 				throw new NotFoundException('URL not found');
 			}
 
+			await this.prisma.url.update({
+				where: { shortCode },
+				data: {
+					clickCount: (url.clickCount || 0) + 1,
+				},
+			});
+
 			return url;
 		} catch (error) {
 			this.logger.error(`Error retrieving URL with short code ${shortCode}`, error);
@@ -231,6 +238,7 @@ export class UrlService {
 
 		const totalPages = Math.ceil(totalurls / limit);
 		const urls = ursl.map(url => ({
+			id: url.id,
 			shortenedUrl: `${process.env.BACKEND_URL}/url/${url.shortCode}`,
 			originalUrl: url.originalUrl,
 			uid: url.userId,
@@ -247,5 +255,124 @@ export class UrlService {
 			limit,
 			totalClicks: urls.reduce((acc, url) => acc + (url.clicks || 0), 0),
 		};
+	}
+
+	async deleteAllUrl (uid: string) {
+		try {
+			const url = await this.prisma.url.deleteMany({
+				where: {
+					userId: uid,
+				},
+			})
+
+			if (!url) {
+				this.logger.error(`URLs not found for user ${uid}`);
+				throw new NotFoundException('URL not found');
+			}
+
+			this.logger.log(`URLs deleted successfully for user ${uid}`);
+			return { message: 'URL deleted successfully' };
+
+		} catch (error) {
+			this.logger.error(error.message)
+		}
+	}
+
+	async deleteUrl (uid: string, urlId: string) {
+		try {
+
+			const url = await this.prisma.url.deleteMany({
+				where: {
+					id: urlId,
+					userId: uid,
+				}
+			})
+
+			if (!url) {
+				this.logger.error(`URL with ID ${urlId} not found for user ${uid}`);
+				throw new NotFoundException('URL not found');
+			}
+
+			this.logger.log(`URL with ID ${urlId} deleted successfully for user ${uid}`);
+			return { message: 'URL deleted successfully' };
+
+		} catch (error) {
+			this.logger.error(error.message)
+		}
+	}
+
+	async extendUrl(uid: string, urlId: string, expiresAt: string) {
+		try {
+			const url = await this.prisma.url.findUnique({
+				where: { id: urlId, userId: uid },
+			})
+
+			if (!url) {
+				this.logger.error(`URL with ID ${urlId} not found for user ${uid}`);
+				throw new NotFoundException('URL not found');
+			}
+
+			if (expiresAt && (new Date(expiresAt) <= new Date() || url.expiresAt && new Date(expiresAt) <= url.expiresAt)) {
+				this.logger.error('Expiration date must be in the future');
+				throw new BadRequestException('Expiration date must be in the future');
+			}
+
+			const expiresAtDate = new Date(expiresAt);
+			
+			const updatedUrl = await this.prisma.url.update({
+				where: { id: urlId, userId: uid },
+				data: {
+					expiresAt: expiresAtDate,
+				},
+			})
+
+			if (!updatedUrl) {
+				this.logger.error(`Failed to update expiration date for URL with ID ${urlId}`);
+				throw new BadRequestException('Failed to update expiration date');
+			}
+
+			return {message: 'URL lifetime extended successfully', expiresAt: updatedUrl.expiresAt.toISOString()};
+		} catch(error) {
+			this.logger.error(error.message);
+			throw new BadRequestException('Error extending URL lifetime');
+		}
+	}
+
+	async regenerateUrl(uid: string, urlId: string) {
+		try {
+			const url = await this.prisma.url.findUnique({
+				where: { id: urlId, userId: uid },
+			})
+
+			if (!url) {
+				this.logger.error(`URL with ID ${urlId} not found for user ${uid}`);
+				throw new NotFoundException('URL not found');
+			}
+
+			let newShortCode = this.generateShortCode(url.originalUrl);
+			while (await this.checkCollision(newShortCode)) {
+				newShortCode = this.generateShortCode(url.originalUrl + Math.random().toString(36).substring(2, 7));
+			}
+
+			const updatedUrl = await this.prisma.url.update({
+				where: { id: urlId, userId: uid },
+				data: {
+					shortCode: newShortCode,
+				},
+			})
+
+			if (!updatedUrl) {
+				this.logger.error(`Failed to regenerate URL with ID ${urlId}`);
+				throw new BadRequestException('Failed to regenerate URL');
+			}
+
+			return {
+				shortenedUrl: `${process.env.BACKEND_URL}/url/${newShortCode}`,
+				id: updatedUrl.id,
+			};
+		} catch(error) {
+			this.logger.error(error.message);
+			throw new BadRequestException('Error regenerating URL');
+		}
 	}
 }

@@ -72,4 +72,60 @@ export class UrlController {
 			throw new BadRequestException(error.message);
 		}
 	}
+
+	@Delete('delete-all')
+	@UseGuards(JwtAuthGuard)
+	async deleteAllUrl(@Req() req) {
+		try {
+			const userId = req.user?.id;
+			if (!userId) {
+				throw new BadRequestException('User not authenticated');
+			}
+			return await this.urlService.deleteAllUrl(userId);
+		} catch (error) {
+			throw new BadRequestException(error.message);
+		}
+	}
+
+	@Delete('delete/:id')
+	@UseGuards(JwtAuthGuard)
+	async deleteUrl(@Param('id') urlId: string, @Req() req) {
+		try {
+			const userId = req.user?.id;
+			if (!userId) {
+				throw new BadRequestException('User not authenticated');
+			}
+			return await this.urlService.deleteUrl(userId, urlId);
+		} catch (error) {
+			throw new BadRequestException(error.message);
+		}
+	}
+
+	@Put('extend/:id')
+	@UseGuards(JwtAuthGuard)
+	async extendUrl(@Param('id') urlId: string, @Body('expiresAt') expiresAt: string, @Req() req) {
+		try {
+			const userId = req.user?.id;
+			if (!userId) {
+				throw new BadRequestException('User not authenticated');
+			}
+			return await this.urlService.extendUrl(userId, urlId, expiresAt);
+		} catch (error) {
+			throw new BadRequestException(error.message);
+		}
+	}
+
+	@Put('regenerate/:shortCode')
+	@UseGuards(JwtAuthGuard)
+	async regenerateUrl(@Param('shortCode') shortCode: string, @Req() req) {
+		try {
+			const userId = req.user?.id;
+			if (!userId) {
+				throw new BadRequestException('User not authenticated');
+			}
+			return await this.urlService.regenerateUrl(userId, shortCode);
+		} catch (error) {
+			throw new BadRequestException(error.message);
+		}
+	}
 }
