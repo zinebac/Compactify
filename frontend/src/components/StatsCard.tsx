@@ -1,87 +1,127 @@
 import React from 'react';
-import { Link2, BarChart3, Activity, TrendingUp } from 'lucide-react';
+import { 
+	BarChart3, 
+	TrendingUp,
+	Link2,
+	Users,
+} from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 
 interface StatsCardsProps {
-	data: {
-		total: number;
-		urls: Array<{
-			clicks: number;
-			isExpired: boolean;
-			createdAt: string;
-		}>;
-	} | null;
+	user: any;
+	totalUrls: number;
+	totalClicks: number;
+	activeUrls: number;
 }
 
-interface StatCardProps {
-	icon: React.ReactNode;
-	label: string;
-	value: number;
-	iconBg: string;
-	iconColor: string;
+interface ActivityStatus {
+	clicksPerUrl: string;
+	activePercentage: string;
+	status: 'Excellent' | 'Good' | 'Needs Attention';
 }
 
-const StatCard: React.FC<StatCardProps> = ({ icon, label, value, iconBg, iconColor }) => (
-	<Card>
-		<CardContent className="p-6">
-			<div className="flex items-center">
-				<div className={`p-2 ${iconBg} rounded-lg`}>
-					<div className={iconColor}>{icon}</div>
-				</div>
-				<div className="ml-4">
-					<p className="text-sm font-medium text-muted-foreground">{label}</p>
-					<p className="text-2xl font-bold">{value.toLocaleString()}</p>
-				</div>
-			</div>
-		</CardContent>
-	</Card>
-);
+export const StatsCards: React.FC<StatsCardsProps> = ({ 
+	totalUrls,
+	totalClicks,
+	activeUrls,
+}) => {
 
-export const StatsCards: React.FC<StatsCardsProps> = ({ data }) => {
-	const totalClicks = data?.urls.reduce((sum, url) => sum + url.clicks, 0) || 0;
-	const activeUrls = data?.urls.filter(url => !url.isExpired).length || 0;
-	const thisMonthUrls = data?.urls.filter(url => {
-		const urlDate = new Date(url.createdAt);
-		const now = new Date();
-		return urlDate.getMonth() === now.getMonth() && urlDate.getFullYear() === now.getFullYear();
-	}).length || 0;
-
-	const stats = [
-		{
-			icon: <Link2 className="h-6 w-6" />,
-			label: "Total URLs",
-			value: data?.total || 0,
-			iconBg: "bg-blue-100 dark:bg-blue-900/20",
-			iconColor: "text-blue-600 dark:text-blue-400",
-		},
-		{
-			icon: <BarChart3 className="h-6 w-6" />,
-			label: "Total Clicks",
-			value: totalClicks,
-			iconBg: "bg-green-100 dark:bg-green-900/20",
-			iconColor: "text-green-600 dark:text-green-400",
-		},
-		{
-			icon: <Activity className="h-6 w-6" />,
-			label: "Active URLs",
-			value: activeUrls,
-			iconBg: "bg-purple-100 dark:bg-purple-900/20",
-			iconColor: "text-purple-600 dark:text-purple-400",
-		},
-		{
-			icon: <TrendingUp className="h-6 w-6" />,
-			label: "This Month",
-			value: thisMonthUrls,
-			iconBg: "bg-orange-100 dark:bg-orange-900/20",
-			iconColor: "text-orange-600 dark:text-orange-400",
-		},
-	];
+	const getActivityStatus = (): ActivityStatus => {
+		const clicksPerUrl = totalUrls > 0 ? (totalClicks / totalUrls).toFixed(1) : '0';
+		const activePercentage = totalUrls > 0 ? ((activeUrls / totalUrls) * 100).toFixed(0) : '0';
+		
+		let status: ActivityStatus['status'];
+		if (activeUrls > totalUrls * 0.8) {
+			status = 'Excellent';
+		} else if (activeUrls > totalUrls * 0.5) {
+			status = 'Good';
+		} else {
+			status = 'Needs Attention';
+		}
+		
+		return {
+			clicksPerUrl,
+			activePercentage,
+			status
+		};
+		};
+	
+		const activity = getActivityStatus();
 
 	return (
-		<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-			{stats.map((stat, index) => (
-				<StatCard key={index} {...stat} />
-			))}
+		<div className="flex flex-col lg:flex-row gap-6 p-6 justify-center items-center">
+			<Card className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 border-blue-200 shadow-md hover:shadow-lg transition-shadow duration-300">
+				<CardContent className="p-8">
+				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+					<div className="flex items-center gap-4 group">
+						<div className="h-12 w-12 rounded-xl bg-blue-100 flex items-center justify-center group-hover:scale-110 transition-transform duration-200 shadow-sm">
+							<Link2 size={24} className="text-blue-600" />
+						</div>
+						<div>
+							<p className="text-sm font-medium text-gray-600 mb-1">Total URLs</p>
+							<p className="text-3xl font-bold text-gray-900 tracking-tight">
+							{totalUrls.toLocaleString()}
+							</p>
+						</div>
+					</div>
+
+					<div className="flex items-center gap-4 group">
+						<div className="h-12 w-12 rounded-xl bg-green-100 flex items-center justify-center group-hover:scale-110 transition-transform duration-200 shadow-sm">
+							<TrendingUp size={24} className="text-green-600" />
+						</div>
+						<div>
+							<p className="text-sm font-medium text-gray-600 mb-1">Total Clicks</p>
+							<p className="text-3xl font-bold text-gray-900 tracking-tight">
+							{totalClicks.toLocaleString()}
+							</p>
+						</div>
+					</div>
+
+					<div className="flex items-center gap-4 group">
+						<div className="h-12 w-12 rounded-xl bg-purple-100 flex items-center justify-center group-hover:scale-110 transition-transform duration-200 shadow-sm">
+							<BarChart3 size={24} className="text-purple-600" />
+						</div>
+						<div>
+							<p className="text-sm font-medium text-gray-600 mb-1">Avg. Clicks/URL</p>
+							<p className="text-3xl font-bold text-gray-900 tracking-tight">
+							{activity.clicksPerUrl}
+							</p>
+						</div>
+					</div>
+
+					<div className="flex items-center gap-4 group">
+						<div className="h-12 w-12 rounded-xl bg-orange-100 flex items-center justify-center group-hover:scale-110 transition-transform duration-200 shadow-sm">
+							<Users size={24} className="text-orange-600" />
+						</div>
+						<div>
+							<p className="text-sm font-medium text-gray-600 mb-1">Account Status</p>
+							<div className="flex items-center gap-2">
+								<Badge 
+									variant={
+										activity.status === 'Excellent' ? 'default' : 
+										activity.status === 'Good' ? 'secondary' : 
+										'destructive'
+									}
+									className={`text-xs font-medium px-2 py-1 ${
+										activity.status === 'Excellent' 
+											? 'bg-green-100 text-green-800 border-green-200' 
+											: activity.status === 'Good' 
+											? 'bg-blue-100 text-blue-800 border-blue-200' 
+											: 'bg-red-100 text-red-800 border-red-200'
+									}`}
+								>
+									{activity.status}
+								</Badge>
+								<span className="text-sm text-gray-500 font-medium">
+									({activity.activePercentage}% active)
+								</span>
+							</div>
+						</div>
+					</div>
+				</div>
+				</CardContent>
+			</Card>
 		</div>
 	);
 };

@@ -26,3 +26,29 @@ export interface DashboardQuery {
 	filter?: 'all' | 'expired' | 'active';
 	search?: string;
 }
+
+export interface URLData {
+	id: string;
+	originalUrl: string;
+	shortenedUrl: string;
+	clicks: number;
+	createdAt: string;
+	expiresAt: string | null;
+	isExpired: boolean;
+}
+
+export interface DashboardData {
+	currentPage: number;
+	urls: URLData[];
+	totalClicks: number;
+	totalUrls: number;
+	page: number;
+	limit: number;
+	totalPages: number;
+}
+
+export interface DashboardStats {
+	totalUrls: number;
+	totalClicks: number;
+	activeUrls: number;
+}
