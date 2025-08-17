@@ -22,6 +22,7 @@ export class UrlController {
 	
 	@Get('dashboard')
 	@UseGuards(JwtAuthGuard)
+	@Throttle({ default: { limit: 0, ttl: 0 } })
 	async getDashboard(
 		@Req() req,
 		@Query('page') page: number = 1,
@@ -52,6 +53,7 @@ export class UrlController {
 	}
 	
 	@Get(':shortCode')
+	@Throttle({ default: { limit: 0, ttl: 0 } })
 	async getUrl(@Param('shortCode') shortCode: string, @Res() res) {
 		try {
 			const url = await this.urlService.getUrl(shortCode);
@@ -65,6 +67,7 @@ export class UrlController {
 
 	@Post('create')
 	@UseGuards(JwtAuthGuard)
+	@Throttle({ default: { limit: 0, ttl: 0 } })
 	async createUrl(@Body() url: CreateUrlDto) {
 		try {
 			return await this.urlService.createAuthUrl(url);
