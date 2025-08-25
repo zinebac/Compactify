@@ -24,16 +24,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ExtendDialog } from './ExtendDialog';
 import { cn } from '@/lib/utils';
-
-interface URLData {
-  id: string;
-  originalUrl: string;
-  shortenedUrl: string;
-  clicks: number;
-  createdAt: string;
-  expiresAt: string | null;
-  isExpired: boolean;
-}
+import type { URLData } from '@/types';
 
 interface TableRowProps {
   url: URLData;
@@ -41,7 +32,7 @@ interface TableRowProps {
   onSelect?: (checked: boolean) => void;
   onDelete: (id: string) => Promise<void>;
   onRegenerate: (id: string) => Promise<void>;
-  onExtend: (id: string, hours: number) => Promise<void>;
+  onExtend: (id: string, expiresAt: string) => Promise<void>;
   className?: string;
 }
 
@@ -58,15 +49,15 @@ export const TableRow: React.FC<TableRowProps> = ({
 }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [extendDialogOpen, setExtendDialogOpen] = useState<boolean>(false);
-  console.log('Rendering TableRow for URL:', url);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  const handleOpenUrl = (shortenedUrl: string): void => {
+  const handleOpenUrl = (url: string): void => {
     try {
-      window.open(shortenedUrl, '_blank');
+      window.open(url, '_blank', 'noopener,noreferrer');
     } catch (error) {
       console.error('Failed to open URL:', error);
     }
-  }
+  };
 
   const formatDate = (dateString: string): string => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -116,29 +107,62 @@ export const TableRow: React.FC<TableRowProps> = ({
   };
 
   const handleDelete = async (): Promise<void> => {
+    const confirmed = window.confirm('Are you sure you want to delete this URL? This action cannot be undone.');
+    if (!confirmed) return;
+
+    setActionLoading('delete');
     try {
       await onDelete(url.id);
     } catch (error) {
       console.error('Failed to delete URL:', error);
+    } finally {
+      setActionLoading(null);
     }
   };
 
   const handleRegenerate = async (): Promise<void> => {
+    const confirmed = window.confirm('Are you sure you want to regenerate this URL? The old short URL will no longer work.');
+    if (!confirmed) return;
+
+    setActionLoading('regenerate');
     try {
       await onRegenerate(url.id);
     } catch (error) {
       console.error('Failed to regenerate URL:', error);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // ✅ Enhanced extend handler
+  const handleExtend = async (urlId: string, hours: number): Promise<void> => {
+    setActionLoading('extend');
+    try {
+      // Calculate new expiry date
+      const currentExpiry = url.expiresAt ? new Date(url.expiresAt) : new Date();
+      const newExpiry = new Date(currentExpiry.getTime() + hours * 60 * 60 * 1000);
+      
+      await onExtend(urlId, newExpiry.toISOString());
+      setExtendDialogOpen(false);
+    } catch (error) {
+      console.error('Failed to extend URL:', error);
+    } finally {
+      setActionLoading(null);
     }
   };
 
   const expiryStatus = getExpiryStatus(url.expiresAt);
   const timeUntilExpiry = getTimeUntilExpiry(url.expiresAt);
 
+  // ✅ Calculate if URL is expired using the getter
+  const isExpired = url.isExpired;
+
   return (
     <TableR 
       className={cn(
         "border-b border-gray-100 transition-all duration-200 hover:shadow-md group",
         isSelected && "bg-blue-50 border-blue-200 shadow-sm",
+        isExpired && "opacity-75",
         className
       )}
     >
@@ -156,7 +180,7 @@ export const TableRow: React.FC<TableRowProps> = ({
             <div 
               className="text-sm font-medium text-gray-900 truncate cursor-pointer hover:text-blue-600 transition-colors duration-200" 
               title={url.originalUrl}
-              onClick={() => window.open(url.originalUrl, '_blank')}
+              onClick={() => handleOpenUrl(url.originalUrl)}
             >
               {url.originalUrl}
             </div>
@@ -170,7 +194,12 @@ export const TableRow: React.FC<TableRowProps> = ({
       <TableCell className="p-4">
         <div className="flex items-center gap-2">
           <code 
-            className="text-sm bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded-md font-mono text-blue-700 cursor-pointer transition-colors duration-200"
+            className={cn(
+              "text-sm px-3 py-1 rounded-md font-mono cursor-pointer transition-colors duration-200",
+              isExpired 
+                ? "bg-gray-100 text-gray-500" 
+                : "bg-blue-50 hover:bg-blue-100 text-blue-700"
+            )}
             onClick={copyToClipboard}
             title="Click to copy"
           >
@@ -191,7 +220,12 @@ export const TableRow: React.FC<TableRowProps> = ({
         <div className="flex items-center gap-2">
           <Badge 
             variant="secondary" 
-            className="gap-1 bg-green-100 text-green-800 hover:bg-green-200 transition-colors duration-200 font-medium"
+            className={cn(
+              "gap-1 transition-colors duration-200 font-medium",
+              url.clicks > 0 
+                ? "bg-green-100 text-green-800 hover:bg-green-200" 
+                : "bg-gray-100 text-gray-600"
+            )}
           >
             <BarChart3 size={12} />
             {url.clicks.toLocaleString()}
@@ -216,10 +250,10 @@ export const TableRow: React.FC<TableRowProps> = ({
       
       <TableCell className="p-4">
         <Badge 
-          variant={url.isExpired ? "destructive" : "default"}
+          variant={isExpired ? "destructive" : "default"}
           className={cn(
             "gap-1 transition-colors duration-200 font-medium",
-            url.isExpired 
+            isExpired 
               ? "bg-red-100 text-red-800 border-red-200 hover:bg-red-200" 
               : expiryStatus === 'expiring-soon'
               ? "bg-yellow-100 text-yellow-800 border-yellow-200 hover:bg-yellow-200"
@@ -227,11 +261,10 @@ export const TableRow: React.FC<TableRowProps> = ({
           )}
         >
           <Activity size={12} />
-          {url.isExpired ? 'Expired' : expiryStatus === 'expiring-soon' ? 'Expiring Soon' : 'Active'}
+          {isExpired ? 'Expired' : expiryStatus === 'expiring-soon' ? 'Expiring Soon' : 'Active'}
         </Badge>
       </TableCell>
       
-      {/* Enhanced Expiry */}
       <TableCell className="p-4">
         {url.expiresAt ? (
           <div className="text-sm">
@@ -258,7 +291,6 @@ export const TableRow: React.FC<TableRowProps> = ({
         )}
       </TableCell>
       
-      {/* Actions */}
       <TableCell className="text-right p-4">
         <div className="flex items-center justify-end gap-1">
           {/* Copy Button */}
@@ -278,15 +310,20 @@ export const TableRow: React.FC<TableRowProps> = ({
           </Button>
           
           {/* Extend Button */}
-          {url.expiresAt && !url.isExpired && (
+          {url.expiresAt && !isExpired && (
             <>
               <Button 
                 variant="ghost" 
                 size="sm" 
+                disabled={actionLoading === 'extend'}
                 className="gap-1 text-green-600 hover:text-green-700 hover:bg-green-100 transition-colors duration-200"
                 onClick={() => setExtendDialogOpen(true)}
               >
-                <CalendarPlus size={14} />
+                {actionLoading === 'extend' ? (
+                  <div className="h-3 w-3 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <CalendarPlus size={14} />
+                )}
                 Extend
               </Button>
               
@@ -294,7 +331,7 @@ export const TableRow: React.FC<TableRowProps> = ({
                 url={url}
                 open={extendDialogOpen}
                 onOpenChange={setExtendDialogOpen}
-                onExtend={onExtend}
+                onExtend={handleExtend}
               />
             </>
           )}
@@ -305,6 +342,7 @@ export const TableRow: React.FC<TableRowProps> = ({
               <Button 
                 variant="ghost" 
                 size="sm"
+                disabled={!!actionLoading}
                 className="h-8 w-8 p-0 text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors duration-200"
               >
                 <MoreHorizontal size={16} />
@@ -312,28 +350,40 @@ export const TableRow: React.FC<TableRowProps> = ({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48 shadow-lg border-gray-200">
               <DropdownMenuItem 
-                onClick={() => handleOpenUrl(url.shortenedUrl)}
+                onClick={() => handleOpenUrl(url.originalUrl)}
                 className="gap-2 cursor-pointer hover:bg-blue-50 focus:bg-blue-50 py-3"
               >
                 <ExternalLink size={14} />
                 Visit Original URL
               </DropdownMenuItem>
               
-              <DropdownMenuItem 
-                onClick={handleRegenerate} 
-                className="gap-2 cursor-pointer hover:bg-blue-50 focus:bg-blue-50 py-3"
-              >
-                <RefreshCw size={14} />
-                Regenerate Code
-              </DropdownMenuItem>
+              {!isExpired && (
+                <DropdownMenuItem 
+                  onClick={handleRegenerate} 
+                  disabled={actionLoading === 'regenerate'}
+                  className="gap-2 cursor-pointer hover:bg-blue-50 focus:bg-blue-50 py-3"
+                >
+                  {actionLoading === 'regenerate' ? (
+                    <div className="h-3 w-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <RefreshCw size={14} />
+                  )}
+                  Regenerate Code
+                </DropdownMenuItem>
+              )}
               
               <DropdownMenuSeparator />
               
               <DropdownMenuItem 
                 onClick={handleDelete}
+                disabled={actionLoading === 'delete'}
                 className="gap-2 text-red-600 focus:text-red-600 hover:bg-red-50 focus:bg-red-50 cursor-pointer py-3"
               >
-                <Trash2 size={14} />
+                {actionLoading === 'delete' ? (
+                  <div className="h-3 w-3 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Trash2 size={14} />
+                )}
                 Delete URL
               </DropdownMenuItem>
             </DropdownMenuContent>

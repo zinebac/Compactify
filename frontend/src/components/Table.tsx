@@ -6,51 +6,32 @@ import {
   Link2, 
   Trash2, 
   RefreshCw, 
-  CalendarPlus,
   X,
-  CheckCircle
+  CheckCircle,
+  AlertTriangle
 } from 'lucide-react';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Table, TableBody, TableHead, TableHeader, TableRow as TableR } from '@/components/ui/table';
 import { TableRow } from './TableRow';
-import type { DashboardQuery } from '@/types';
-
-interface URLData {
-  id: string;
-  originalUrl: string;
-  shortenedUrl: string;
-  clicks: number;
-  createdAt: string;
-  expiresAt: string | null;
-  isExpired: boolean;
-}
-
-interface TableData {
-  currentPage: number;
-  urls: URLData[];
-  totalClicks: number;
-  totalUrls: number;
-  page: number;
-  limit: number;
-  totalPages: number;
-}
+import type { DashboardQuery, DashboardData, URLData } from '@/types';
 
 interface URLTableProps {
-  data: TableData | null;
+  data: DashboardData | null;
   query: DashboardQuery;
   onSort: (sortBy: DashboardQuery['sort']) => void;
   onPageChange: (page: number) => void;
   onDelete: (id: string) => Promise<void>;
   onRegenerate: (id: string) => Promise<void>;
-  onExtend: (id: string, hours: number) => Promise<void>;
+  onExtend: (id: string, expiresAt: string) => Promise<void>;
   onCreateNew: () => void;
   onBulkDelete?: (ids: string[]) => Promise<void>;
   onBulkRegenerate?: (ids: string[]) => Promise<void>;
-  onBulkExtend?: (ids: string[], hours: number) => Promise<void>;
+  isAtLimit?: boolean;
 }
 
 interface SelectedStats {
@@ -71,10 +52,11 @@ export const URLTable: React.FC<URLTableProps> = ({
   onCreateNew,
   onBulkDelete,
   onBulkRegenerate,
-  onBulkExtend,
+  isAtLimit = false,
 }) => {
   const [selectedUrls, setSelectedUrls] = useState<string[]>([]);
   const [isSelectAllChecked, setIsSelectAllChecked] = useState<boolean>(false);
+  const [bulkActionLoading, setBulkActionLoading] = useState<string | null>(null);
 
   const urls = data?.urls || [];
 
@@ -128,48 +110,48 @@ export const URLTable: React.FC<URLTableProps> = ({
     </TableHead>
   );
 
-  // Bulk Actions
+  // ✅ Enhanced Bulk Actions with loading states
   const handleBulkDelete = async (): Promise<void> => {    
-    if (onBulkDelete) {
-      try {
-        await onBulkDelete(selectedUrls);
-        clearSelection();
-        console.log(`Bulk deleted ${selectedUrls.length} URLs`);
-      } catch (error) {
-        console.error('Bulk delete failed:', error);
-      }
+    if (!onBulkDelete || selectedUrls.length === 0) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to delete ${selectedUrls.length} selected URL${selectedUrls.length > 1 ? 's' : ''}? This action cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    setBulkActionLoading('delete');
+    try {
+      await onBulkDelete(selectedUrls);
+      clearSelection();
+    } catch (error) {
+      console.error('Bulk delete failed:', error);
+    } finally {
+      setBulkActionLoading(null);
     }
   };
 
   const handleBulkRegenerate = async (): Promise<void> => {
-    // const confirmed = window.confirm(
-    //   `Are you sure you want to regenerate ${selectedUrls.length} selected URL${selectedUrls.length > 1 ? 's' : ''}? This will create new short codes.`
-    // );
+    if (!onBulkRegenerate || selectedUrls.length === 0) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to regenerate ${selectedUrls.length} selected URL${selectedUrls.length > 1 ? 's' : ''}? This will create new short codes.`
+    );
     
-    if (onBulkRegenerate) {
-      try {
-        await onBulkRegenerate(selectedUrls);
-        clearSelection();
-        console.log(`Bulk regenerated ${selectedUrls.length} URLs`);
-      } catch (error) {
-        console.error('Bulk regenerate failed:', error);
-      }
+    if (!confirmed) return;
+
+    setBulkActionLoading('regenerate');
+    try {
+      await onBulkRegenerate(selectedUrls);
+      clearSelection();
+    } catch (error) {
+      console.error('Bulk regenerate failed:', error);
+    } finally {
+      setBulkActionLoading(null);
     }
   };
 
-  const handleBulkExtend = async (hours: number = 24): Promise<void> => {
-    if (onBulkExtend) {
-      try {
-        await onBulkExtend(selectedUrls, hours);
-        clearSelection();
-        console.log(`Bulk extended ${selectedUrls.length} URLs by ${hours} hours`);
-      } catch (error) {
-        console.error('Bulk extend failed:', error);
-      }
-    }
-  };
-
-  // Get stats for selected URLs
+  // ✅ Calculate stats for selected URLs
   const selectedStats: SelectedStats = {
     total: selectedUrls.length,
     active: selectedUrls.filter(id => {
@@ -186,6 +168,7 @@ export const URLTable: React.FC<URLTableProps> = ({
     }).length,
   };
 
+  // ✅ Empty state with URL limit awareness
   if (!data || urls.length === 0) {
     return (
       <Card className="border-2 border-dashed border-gray-300 hover:border-gray-400 transition-colors shadow-md">
@@ -195,22 +178,36 @@ export const URLTable: React.FC<URLTableProps> = ({
               <Link2 className="h-12 w-12 text-gray-400" />
             </div>
             <div className="space-y-3">
-              <h3 className="text-xl font-semibold text-gray-900">No URLs found</h3>
+              <h3 className="text-xl font-semibold text-gray-900">
+                {query.search ? 'No URLs match your search' : 'No URLs found'}
+              </h3>
               <p className="text-gray-500 max-w-md text-lg">
                 {query.search 
                   ? 'No URLs match your search criteria. Try adjusting your filters or search terms.' 
-                  : 'Get started by creating your first shortened URL and track its performance.'
+                  : isAtLimit
+                    ? 'You\'ve reached your URL limit. Delete some URLs to create new ones.'
+                    : 'Get started by creating your first shortened URL and track its performance.'
                 }
               </p>
             </div>
-            <Button 
-              onClick={onCreateNew} 
-              className="gap-2 mt-6 bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl transition-all duration-200" 
-              size="lg"
-            >
-              <Plus size={20} />
-              Create your first URL
-            </Button>
+            
+            {isAtLimit ? (
+              <Alert className="max-w-md border-amber-200 bg-amber-50">
+                <AlertTriangle className="h-4 w-4 text-amber-600" />
+                <AlertDescription className="text-amber-800">
+                  You've reached your URL limit. Delete some existing URLs to create new ones.
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <Button 
+                onClick={onCreateNew} 
+                className="gap-2 mt-6 bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl transition-all duration-200" 
+                size="lg"
+              >
+                <Plus size={20} />
+                {query.search ? 'Create New URL' : 'Create your first URL'}
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -249,10 +246,20 @@ export const URLTable: React.FC<URLTableProps> = ({
                   variant="outline"
                   size="sm"
                   onClick={handleBulkDelete}
+                  disabled={bulkActionLoading === 'delete'}
                   className="gap-1 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 transition-colors duration-200"
                 >
-                  <Trash2 size={14} />
-                  Delete Selected
+                  {bulkActionLoading === 'delete' ? (
+                    <>
+                      <div className="h-3 w-3 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 size={14} />
+                      Delete Selected
+                    </>
+                  )}
                 </Button>
 
                 {selectedStats.active > 0 && (
@@ -260,22 +267,20 @@ export const URLTable: React.FC<URLTableProps> = ({
                     variant="outline"
                     size="sm"
                     onClick={handleBulkRegenerate}
+                    disabled={bulkActionLoading === 'regenerate'}
                     className="gap-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200 transition-colors duration-200"
                   >
-                    <RefreshCw size={14} />
-                    Regenerate
-                  </Button>
-                )}
-
-                {selectedStats.withExpiry > 0 && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleBulkExtend(24)}
-                    className="gap-1 text-green-600 hover:text-green-700 hover:bg-green-50 border-green-200 transition-colors duration-200"
-                  >
-                    <CalendarPlus size={14} />
-                    Extend 24h
+                    {bulkActionLoading === 'regenerate' ? (
+                      <>
+                        <div className="h-3 w-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                        Regenerating...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw size={14} />
+                        Regenerate ({selectedStats.active})
+                      </>
+                    )}
                   </Button>
                 )}
 
@@ -283,6 +288,7 @@ export const URLTable: React.FC<URLTableProps> = ({
                   variant="ghost"
                   size="sm"
                   onClick={clearSelection}
+                  disabled={!!bulkActionLoading}
                   className="gap-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors duration-200"
                 >
                   <X size={14} />
@@ -304,9 +310,16 @@ export const URLTable: React.FC<URLTableProps> = ({
                 Manage and track your shortened URLs
               </p>
             </div>
-            <Badge variant="secondary" className="text-sm font-medium bg-gray-100 text-gray-700">
-              {data.totalUrls} total
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary" className="text-sm font-medium bg-gray-100 text-gray-700">
+                {data.pagination.totalUrls} total
+              </Badge>
+              {isAtLimit && (
+                <Badge variant="destructive" className="text-sm font-medium">
+                  Limit Reached
+                </Badge>
+              )}
+            </div>
           </div>
         </CardHeader>
         
@@ -357,30 +370,30 @@ export const URLTable: React.FC<URLTableProps> = ({
           </div>
 
           {/* Pagination */}
-          {data.totalPages > 1 && (
+          {data.pagination.totalPages > 1 && (
             <>
               <Separator className="bg-gray-200" />
               <div className="flex items-center justify-between p-6 bg-gray-50">
                 <div className="text-sm text-gray-600">
                   Showing{' '}
                   <span className="font-semibold text-gray-900">
-                    {((data.page - 1) * data.limit) + 1}
+                    {((data.pagination.currentPage - 1) * data.pagination.limit) + 1}
                   </span>
                   {' '}to{' '}
                   <span className="font-semibold text-gray-900">
-                    {Math.min(data.page * data.limit, data.totalUrls)}
+                    {Math.min(data.pagination.currentPage * data.pagination.limit, data.pagination.totalUrls)}
                   </span>
                   {' '}of{' '}
                   <span className="font-semibold text-gray-900">
-                    {data.totalUrls}
+                    {data.pagination.totalUrls}
                   </span>
                   {' '}results
                 </div>
                 
                 <div className="flex items-center gap-2">
                   <Button
-                    onClick={() => onPageChange(data.page - 1)}
-                    disabled={data.page === 1}
+                    onClick={() => onPageChange(data.pagination.currentPage - 1)}
+                    disabled={data.pagination.currentPage === 1}
                     variant="outline"
                     size="sm"
                     className="gap-1 border-gray-300 hover:border-gray-400 disabled:opacity-50"
@@ -389,16 +402,28 @@ export const URLTable: React.FC<URLTableProps> = ({
                   </Button>
                   
                   <div className="flex items-center gap-1">
-                    {Array.from({ length: Math.min(5, data.totalPages) }, (_, i) => {
-                      const page = i + 1;
+                    {Array.from({ length: Math.min(5, data.pagination.totalPages) }, (_, i) => {
+                      let page;
+                      if (data.pagination.totalPages <= 5) {
+                        page = i + 1;
+                      } else {
+                        if (data.pagination.currentPage <= 3) {
+                          page = i + 1;
+                        } else if (data.pagination.currentPage >= data.pagination.totalPages - 2) {
+                          page = data.pagination.totalPages - 4 + i;
+                        } else {
+                          page = data.pagination.currentPage - 2 + i;
+                        }
+                      }
+                      
                       return (
                         <Button
                           key={page}
                           onClick={() => onPageChange(page)}
-                          variant={data.page === page ? "default" : "ghost"}
+                          variant={data.pagination.currentPage === page ? "default" : "ghost"}
                           size="sm"
                           className={`w-10 h-10 p-0 ${
-                            data.page === page 
+                            data.pagination.currentPage === page 
                               ? 'bg-blue-600 hover:bg-blue-700 text-white' 
                               : 'hover:bg-gray-100'
                           }`}
@@ -408,28 +433,28 @@ export const URLTable: React.FC<URLTableProps> = ({
                       );
                     })}
                     
-                    {data.totalPages > 5 && (
+                    {data.pagination.totalPages > 5 && data.pagination.currentPage < data.pagination.totalPages - 2 && (
                       <>
                         <span className="text-gray-400 px-2">...</span>
                         <Button
-                          onClick={() => onPageChange(data.totalPages)}
-                          variant={data.page === data.totalPages ? "default" : "ghost"}
+                          onClick={() => onPageChange(data.pagination.totalPages)}
+                          variant={data.pagination.currentPage === data.pagination.totalPages ? "default" : "ghost"}
                           size="sm"
                           className={`w-10 h-10 p-0 ${
-                            data.page === data.totalPages 
+                            data.pagination.currentPage === data.pagination.totalPages 
                               ? 'bg-blue-600 hover:bg-blue-700 text-white' 
                               : 'hover:bg-gray-100'
                           }`}
                         >
-                          {data.totalPages}
+                          {data.pagination.totalPages}
                         </Button>
                       </>
                     )}
                   </div>
                   
                   <Button
-                    onClick={() => onPageChange(data.page + 1)}
-                    disabled={data.page === data.totalPages}
+                    onClick={() => onPageChange(data.pagination.currentPage + 1)}
+                    disabled={data.pagination.currentPage === data.pagination.totalPages}
                     variant="outline" 
                     size="sm"
                     className="gap-1 border-gray-300 hover:border-gray-400 disabled:opacity-50"

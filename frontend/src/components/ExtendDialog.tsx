@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Clock } from 'lucide-react';
+import { Clock, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { 
   Dialog, 
   DialogContent, 
@@ -11,16 +12,7 @@ import {
   DialogHeader, 
   DialogTitle 
 } from '@/components/ui/dialog';
-
-interface URLData {
-  id: string;
-  originalUrl: string;
-  shortenedUrl: string;
-  clicks: number;
-  createdAt: string;
-  expiresAt: string | null;
-  isExpired: boolean;
-}
+import type { URLData } from '@/types';
 
 interface ExtendURLDialogProps {
   url: URLData;
@@ -29,7 +21,15 @@ interface ExtendURLDialogProps {
   onExtend: (id: string, hours: number) => Promise<void>;
 }
 
-type ExtendDuration = '6' | '12' | '18' | '24';
+type ExtendDuration = 6 | 12 | 24 | 48 | 168; // 1 week = 168 hours
+
+const EXTEND_OPTIONS = [
+  { value: 6, label: '6 hours' },
+  { value: 12, label: '12 hours' },
+  { value: 24, label: '1 day' },
+  { value: 48, label: '2 days' },
+  { value: 168, label: '1 week' },
+] as const;
 
 export const ExtendDialog: React.FC<ExtendURLDialogProps> = ({
   url,
@@ -37,8 +37,9 @@ export const ExtendDialog: React.FC<ExtendURLDialogProps> = ({
   onOpenChange,
   onExtend,
 }) => {
-  const [extendDuration, setExtendDuration] = useState<ExtendDuration>('24');
+  const [extendDuration, setExtendDuration] = useState<ExtendDuration>(24);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
   const formatDate = (dateString: string): string => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -53,26 +54,31 @@ export const ExtendDialog: React.FC<ExtendURLDialogProps> = ({
   const getNewExpiryDate = (): Date | null => {
     if (!url.expiresAt) return null;
     const currentExpiry = new Date(url.expiresAt);
-    const hoursToAdd = parseInt(extendDuration);
-    return new Date(currentExpiry.getTime() + hoursToAdd * 60 * 60 * 1000);
+    return new Date(currentExpiry.getTime() + extendDuration * 60 * 60 * 1000);
   };
 
   const handleExtend = async (): Promise<void> => {
     setIsLoading(true);
+    setError(null);
+    
     try {
-      const extendHours = parseInt(extendDuration);
-      await onExtend(url.id, extendHours);
+      await onExtend(url.id, extendDuration);
       onOpenChange(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to extend URL lifetime:', error);
+      setError(error.message || 'Failed to extend URL lifetime. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleDurationChange = (value: string): void => {
-    setExtendDuration(value as ExtendDuration);
+    setExtendDuration(Number(value) as ExtendDuration);
+    setError(null);
   };
+
+  const isExpired = url.isExpired;
+  const newExpiryDate = getNewExpiryDate();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -88,14 +94,27 @@ export const ExtendDialog: React.FC<ExtendURLDialogProps> = ({
         </DialogHeader>
         
         <div className="space-y-6 py-4">
+          {/* URL Info */}
+          <div className="p-3 bg-gray-50 rounded-lg border">
+            <Label className="text-xs font-medium text-gray-700 uppercase tracking-wide">
+              URL
+            </Label>
+            <p className="text-sm font-mono text-gray-900 mt-1 truncate" title={url.originalUrl}>
+              {url.originalUrl}
+            </p>
+          </div>
+
           {/* Current Expiry Information */}
-          <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-            <Label className="text-sm font-medium text-blue-900 block mb-1">
+          <div className={`p-4 rounded-lg border ${isExpired ? 'bg-red-50 border-red-200' : 'bg-blue-50 border-blue-200'}`}>
+            <Label className={`text-sm font-medium block mb-1 ${isExpired ? 'text-red-900' : 'text-blue-900'}`}>
               Current expiry:
             </Label>
-            <p className="text-blue-800 font-medium">
+            <p className={`font-medium ${isExpired ? 'text-red-800' : 'text-blue-800'}`}>
               {url.expiresAt ? formatDate(url.expiresAt) : 'No expiry set'}
             </p>
+            {isExpired && (
+              <p className="text-xs text-red-600 mt-1">⚠️ This URL has already expired</p>
+            )}
           </div>
           
           {/* Duration Selection */}
@@ -104,28 +123,39 @@ export const ExtendDialog: React.FC<ExtendURLDialogProps> = ({
               Extend by:
             </Label>
             <Select 
-              value={extendDuration} 
+              value={String(extendDuration)} 
               onValueChange={handleDurationChange}
             >
               <SelectTrigger className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="6" className="cursor-pointer">6 hours</SelectItem>
-                <SelectItem value="12" className="cursor-pointer">12 hours</SelectItem>
-                <SelectItem value="18" className="cursor-pointer">18 hours</SelectItem>
-                <SelectItem value="24" className="cursor-pointer">24 hours (1 day)</SelectItem>
+                {EXTEND_OPTIONS.map(option => (
+                  <SelectItem key={option.value} value={String(option.value)} className="cursor-pointer">
+                    {option.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
           
           {/* New Expiry Preview */}
           <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-            <p className="text-sm font-medium text-green-900 mb-1">New expiry:</p>
+            <Label className="text-sm font-medium text-green-900 block mb-1">
+              New expiry:
+            </Label>
             <p className="text-green-800 font-medium">
-              {getNewExpiryDate()?.toLocaleString() || 'Unable to calculate'}
+              {newExpiryDate ? formatDate(newExpiryDate.toISOString()) : 'Unable to calculate'}
             </p>
           </div>
+
+          {/* Error Display */}
+          {error && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
         </div>
         
         <DialogFooter className="gap-3">
@@ -140,10 +170,19 @@ export const ExtendDialog: React.FC<ExtendURLDialogProps> = ({
           <Button 
             onClick={handleExtend} 
             className="gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg transition-all duration-200"
-            disabled={isLoading}
+            disabled={isLoading || !newExpiryDate}
           >
-            <Clock size={16} />
-            {isLoading ? 'Extending...' : 'Extend Lifetime'}
+            {isLoading ? (
+              <>
+                <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Extending...
+              </>
+            ) : (
+              <>
+                <Clock size={16} />
+                Extend Lifetime
+              </>
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>

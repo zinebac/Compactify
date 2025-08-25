@@ -10,44 +10,49 @@ import { Card, CardContent } from '@/components/ui/card';
 
 interface StatsCardsProps {
 	user: any;
-	totalUrls: number;
-	totalClicks: number;
-	activeUrls: number;
+  totalUrls: number;
+  totalClicks: number;
+  activeUrls: number;
+  maxUrls?: number;
 }
 
 interface ActivityStatus {
 	clicksPerUrl: string;
 	activePercentage: string;
+	usagePercentage: string;
 	status: 'Excellent' | 'Good' | 'Needs Attention';
 }
 
 export const StatsCards: React.FC<StatsCardsProps> = ({ 
-	totalUrls,
-	totalClicks,
-	activeUrls,
+  totalUrls,
+  totalClicks,
+  activeUrls,
+  maxUrls = 50,
 }) => {
 
-	const getActivityStatus = (): ActivityStatus => {
-		const clicksPerUrl = totalUrls > 0 ? (totalClicks / totalUrls).toFixed(1) : '0';
-		const activePercentage = totalUrls > 0 ? ((activeUrls / totalUrls) * 100).toFixed(0) : '0';
-		
-		let status: ActivityStatus['status'];
-		if (activeUrls > totalUrls * 0.8) {
-			status = 'Excellent';
-		} else if (activeUrls > totalUrls * 0.5) {
-			status = 'Good';
-		} else {
-			status = 'Needs Attention';
-		}
-		
-		return {
-			clicksPerUrl,
-			activePercentage,
-			status
-		};
-		};
-	
-		const activity = getActivityStatus();
+  const getActivityStatus = (): ActivityStatus => {
+    const clicksPerUrl = totalUrls > 0 ? (totalClicks / totalUrls).toFixed(1) : '0';
+    const activePercentage = totalUrls > 0 ? ((activeUrls / totalUrls) * 100).toFixed(0) : '0';
+    const usagePercentage = maxUrls > 0 ? Math.round((totalUrls / maxUrls) * 100) : 0;
+    
+    let status: ActivityStatus['status'];
+    if (usagePercentage >= 100) {
+      status = 'Needs Attention';
+    } else if (usagePercentage >= 80) {
+      status = 'Good';
+    } else {
+      status = 'Excellent';
+    }
+    
+    return {
+      clicksPerUrl,
+      activePercentage,
+      usagePercentage: usagePercentage.toString(),
+      status
+    };
+  };
+
+  const activity = getActivityStatus();
 
 	return (
 		<div className="flex flex-col lg:flex-row gap-6 p-6 justify-center items-center">

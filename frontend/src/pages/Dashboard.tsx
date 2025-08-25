@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import type { DashboardData, DashboardQuery, DashboardStats, URLData } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -10,10 +10,17 @@ import { URLTable } from '@/components/Table';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { StatsCards } from '@/components/StatsCard';
+import { AlertCircle, AlertTriangle } from 'lucide-react';
 
 const fadeIn = {
   hidden: { opacity: 0, y: 20 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.6 } }
+};
+
+// URL limit constants
+const URL_LIMITS = {
+  MAX_URLS_PER_USER: 50,
+  WARNING_THRESHOLD: 0.8, // Show warning at 80% capacity
 };
 
 export const Dashboard: React.FC = () => {
@@ -31,29 +38,66 @@ export const Dashboard: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const { isAuthenticated, user, logout } = useAuth();
 
+  const dashboardStats: DashboardStats = useMemo(() => {
+    if (!data) {
+      return {
+        totalUrls: 0,
+        totalClicks: 0,
+        activeUrls: 0,
+        maxUrls: URL_LIMITS.MAX_URLS_PER_USER,
+      };
+    }
+
+    return {
+      totalUrls: data.pagination.totalUrls,
+      totalClicks: data.stats.totalClicks,
+      activeUrls: data.urls.filter((url: URLData) => !url.isExpired).length,
+      maxUrls: URL_LIMITS.MAX_URLS_PER_USER,
+    };
+  }, [data]);
+
+  // Check if user is near URL limit
+  const isNearLimit = useMemo(() => {
+    return dashboardStats.totalUrls >= URL_LIMITS.MAX_URLS_PER_USER * URL_LIMITS.WARNING_THRESHOLD;
+  }, [dashboardStats.totalUrls]);
+
+  const isAtLimit = useMemo(() => {
+    return dashboardStats.totalUrls >= URL_LIMITS.MAX_URLS_PER_USER;
+  }, [dashboardStats.totalUrls]);
+
   async function fetchDashboard(query: DashboardQuery): Promise<void> {
     try {
       setIsLoading(true);
+      setError(null);
+      
       const response = await apiService.getDashboardData(query);
+      
       if (response) {
         setData(response);
-        setError(null);
       } else {
         setData(null);
         setError('No data found for the given query.');
       }
-      console.log('Dashboard data fetched:', response);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching dashboard:', error);
-      setError('Failed to fetch dashboard data.');
+      
+      if (error.statusCode === 401) {
+        setError('Your session has expired. Please sign in again.');
+        // Optionally redirect to auth
+        setTimeout(() => navigate('/auth'), 3000);
+      } else {
+        setError(error.message || 'Failed to fetch dashboard data.');
+      }
     } finally {
       setIsLoading(false);
     }
   }
 
   useEffect(() => {
-    fetchDashboard(query);
-  }, [query]);
+    if (isAuthenticated) {
+      fetchDashboard(query);
+    }
+  }, [query, isAuthenticated]);
 
   const handleSearch = (term: string): void => {
     setSearchTerm(term);
@@ -68,8 +112,8 @@ export const Dashboard: React.FC = () => {
   const handleSort = (sortBy: DashboardQuery['sort']): void => {
     setQuery(prev => ({
       ...prev,
-      sort: sortBy,
-      order: prev.sort === sortBy && prev.order === 'desc' ? 'asc' : 'desc',
+      sortBy,
+      sortOrder: prev.sort === sortBy && prev.order === 'desc' ? 'asc' : 'desc',
       page: 1
     }));
   };
@@ -79,6 +123,10 @@ export const Dashboard: React.FC = () => {
   };
 
   const handleCreateNew = (): void => {
+    if (isAtLimit) {
+      setError(`You have reached your URL limit (${URL_LIMITS.MAX_URLS_PER_USER}). Please delete some URLs to create new ones.`);
+      return;
+    }
     navigate('/');
   };
 
@@ -100,17 +148,14 @@ export const Dashboard: React.FC = () => {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-      
-      console.log('Export successful: URL data exported to CSV');
     } catch (error) {
       console.error('Export failed:', error);
+      setError('Failed to export data. Please try again.');
     }
   };
 
   const handleRefreshAll = async (): Promise<void> => {
-    console.log('Refreshing all data...');
     await fetchDashboard(query);
-    console.log('Data refresh completed');
   };
 
   const handleLogout = async (): Promise<void> => {
@@ -122,127 +167,123 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  // URL Management Actions
+  // ✅ Enhanced URL Management Actions with better error handling
   const deleteUrl = async (id: string): Promise<void> => {
     try {
-      const response = await apiService.deleteUrl(id);
-      if (!response) {
-        throw new Error('Failed to delete URL');
-      }
-
-      setData((prev: any) => ({
-        ...prev,
-        urls: prev?.urls?.filter((url: URLData) => url.id !== id) || [],
-        totalUrls: prev?.totalUrls - 1
-      }));
-    } catch (error) {
+      await apiService.deleteUrl(id);
+      
+      // Update local state
+      setData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          urls: prev.urls.filter((url: URLData) => url.id !== id),
+          pagination: {
+            ...prev.pagination,
+            totalUrls: prev.pagination.totalUrls - 1,
+          },
+        };
+      });
+      
+      setError(null); // Clear any existing errors
+    } catch (error: any) {
       console.error('Failed to delete URL:', error);
+      setError(error.message || 'Failed to delete URL. Please try again.');
     }
   };
 
   const regenerateUrl = async (id: string): Promise<void> => {
     try {
       const response = await apiService.regenerateUrl(id);
-      if (!response) {
-        throw new Error('Failed to regenerate URL');
+      
+      if (response?.shortenedUrl) {
+        setData((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            urls: prev.urls.map((url: URLData) => 
+              url.id === id ? { ...url, shortenedUrl: response.shortenedUrl } : url
+            ),
+          };
+        });
+        setError(null);
       }
-      setData((prev: any) => ({
-        ...prev,
-        urls: prev?.urls?.map((url: URLData) => 
-          url.id === id ? { ...url, shortenedUrl: response.shortenedUrl } : url
-        ) || []
-      }));
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to regenerate URL:', error);
+      setError(error.message || 'Failed to regenerate URL. Please try again.');
     }
   };
 
-  const extendUrl = async (id: string, hours: any): Promise<void> => {
+  const extendUrl = async (id: string, newExpiresAt: string): Promise<void> => {
     try {
-      const response = await apiService.extendUrl(id, hours);
-      if (!response) {
-        throw new Error('Failed to extend URL lifetime');
+      const response = await apiService.extendUrl(id, newExpiresAt);
+      
+      if (response?.expiresAt) {
+        setData((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            urls: prev.urls.map((url: URLData) => 
+              url.id === id ? { ...url, expiresAt: response.expiresAt } : url
+            ),
+          };
+        });
+        setError(null);
       }
-      setData((prev: any) => ({
-        ...prev,
-        urls: prev?.urls?.map((url: URLData) => 
-          url.id === id ? { ...url, expiresAt: response.expiresAt } : url
-        ) || []
-      }));
-    } catch (error) {
-      console.error('Failed to extend URL lifetime:', error);
-    }
-  };
-
-  const handleBulkDeleteExpired = async (): Promise<void> => {
-    const expiredUrls = data?.urls?.filter((url: URLData) => url.isExpired) || [];
-    
-    if (expiredUrls.length === 0) {
-      console.log('No expired URLs to delete');
-      return;
-    }
-
-    const confirmed = window.confirm(
-      `Are you sure you want to delete ${expiredUrls.length} expired URLs? This action cannot be undone.`
-    );
-
-    if (confirmed) {
-      try {
-        // Implement bulk delete API call when ready
-        console.log(`Bulk delete would delete: ${expiredUrls.length} expired URLs`);
-        await fetchDashboard(query);
-      } catch (error) {
-        console.error('Bulk delete failed:', error);
-      }
+    } catch (error: any) {
+      console.error('Failed to extend URL:', error);
+      setError(error.message || 'Failed to extend URL lifetime. Please try again.');
     }
   };
 
   const handleBulkDelete = async (urls: string[]): Promise<void> => {
-    if (urls.length === 0) {
-      console.log('No URLs selected for deletion');
-      return;
-    }
-      try {
-        await Promise.all(urls.map(id => apiService.deleteUrl(id)));
-        setData((prev: any) => ({
-          ...prev,
-          urls: prev?.urls?.filter((url: URLData) => !urls.includes(url.id)) || [],
-          totalUrls: prev?.totalUrls - urls.length
-        }));
-        console.log(`${urls.length} URLs deleted successfully`);
-      } catch (error) {
-        console.error('Bulk delete failed:', error);
-      }
-  }
-
-  const handleBulkRegenerate = async (urls: string[]): Promise<void> => {
-    if (urls.length === 0) {
-      console.log('No URLs selected for regeneration');
-      return;
-    }
+    if (urls.length === 0) return;
 
     try {
-      const updatedUrls = await Promise.all(urls.map(id => apiService.regenerateUrl(id)));
-      const shortenedUrls = updatedUrls.map((url: any) => ({
-        id: url.id,
-        shortenedUrl: url.shortenedUrl
-      }));
-
-      if (!shortenedUrls || shortenedUrls.length === 0) {
-        console.log('No URLs were regenerated');
-        return;
-      }
-
-      setData((prev: any) => ({
-        ...prev,
-        urls: prev?.urls?.map((url: URLData) => 
-          shortenedUrls.find((u: any) => u.id === url.id) ? { ...url, shortenedUrl: shortenedUrls.find((u: any) => u.id === url.id)?.shortenedUrl } : url
-        ) || []
-      }));
-    } catch (error) {
-      console.error('Bulk regeneration failed:', error);
+      await Promise.all(urls.map(id => apiService.deleteUrl(id)));
+      
+      setData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          urls: prev.urls.filter((url: URLData) => !urls.includes(url.id)),
+          pagination: {
+            ...prev.pagination,
+            totalUrls: prev.pagination.totalUrls - urls.length,
+          },
+        };
+      });
+      
+      setError(null);
+    } catch (error: any) {
+      console.error('Bulk delete failed:', error);
+      setError(error.message || 'Failed to delete selected URLs. Please try again.');
     }
-  }
+  };
+
+  const handleBulkRegenerate = async (urls: string[]): Promise<void> => {
+    if (urls.length === 0) return;
+
+    try {
+      const responses = await Promise.all(urls.map(id => apiService.regenerateUrl(id)));
+      
+      setData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          urls: prev.urls.map((url: URLData) => {
+            const response = responses.find(r => r.id === url.id);
+            return response ? { ...url, shortenedUrl: response.shortenedUrl } : url;
+          }),
+        };
+      });
+      
+      setError(null);
+    } catch (error: any) {
+      console.error('Bulk regenerate failed:', error);
+      setError(error.message || 'Failed to regenerate selected URLs. Please try again.');
+    }
+  };
 
   if (isLoading && !data) {
     return (
@@ -255,52 +296,57 @@ export const Dashboard: React.FC = () => {
     );
   }
 
-  const dashboardStats: DashboardStats = {
-    totalUrls: data?.totalUrls || 0,
-    totalClicks: data?.urls?.reduce((sum: number, url: URLData) => sum + url.clicks, 0) || 0,
-    activeUrls: data?.urls?.filter((url: URLData) => !url.isExpired).length || 0,
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
       <Nav isAuthenticated={isAuthenticated} user={user} handleLogout={handleLogout} />
 
       <main className="container mx-auto px-4 py-8 space-y-8">
-        {/* Enhanced Header with smooth animation */}
+        {/* ✅ URL Limit Warning */}
+        {isNearLimit && (
+          <motion.div initial="hidden" animate="visible" variants={fadeIn}>
+            <Alert 
+              variant={isAtLimit ? "destructive" : "default"} 
+              className={`border-2 ${isAtLimit ? 'border-red-300 bg-red-50' : 'border-yellow-300 bg-yellow-50'}`}
+            >
+              {isAtLimit ? <AlertCircle className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+              <AlertDescription className={isAtLimit ? 'text-red-800' : 'text-yellow-800'}>
+                {isAtLimit 
+                  ? `You have reached your URL limit (${dashboardStats.totalUrls}/${dashboardStats.maxUrls}). Delete some URLs to create new ones.`
+                  : `You're approaching your URL limit (${dashboardStats.totalUrls}/${dashboardStats.maxUrls}). Consider managing your existing URLs.`
+                }
+              </AlertDescription>
+            </Alert>
+          </motion.div>
+        )}
+
+        {/* Header */}
         <motion.div initial="hidden" animate="visible" variants={fadeIn}>
           <DashboardHeader
             user={user}
             totalUrls={dashboardStats.totalUrls}
             totalClicks={dashboardStats.totalClicks}
             activeUrls={dashboardStats.activeUrls}
+            maxUrls={dashboardStats.maxUrls}
+            isAtLimit={isAtLimit}
             onCreateNew={handleCreateNew}
             onExportData={handleExportData}
-            onBulkDelete={handleBulkDeleteExpired}
             onRefreshAll={handleRefreshAll}
           />
         </motion.div>
 
-        <motion.div 
-          initial="hidden" 
-          animate="visible" 
-          variants={fadeIn} 
-          transition={{ delay: 0.1 }}
-        >
+        {/* Stats Cards */}
+        <motion.div initial="hidden" animate="visible" variants={fadeIn} transition={{ delay: 0.1 }}>
           <StatsCards
             user={user}
             totalUrls={dashboardStats.totalUrls}
             totalClicks={dashboardStats.totalClicks}
             activeUrls={dashboardStats.activeUrls}
+            maxUrls={dashboardStats.maxUrls}
           />
-
         </motion.div>
 
-        <motion.div 
-          initial="hidden" 
-          animate="visible" 
-          variants={fadeIn} 
-          transition={{ delay: 0.2 }}
-        >
+        {/* Filters */}
+        <motion.div initial="hidden" animate="visible" variants={fadeIn} transition={{ delay: 0.2 }}>
           <Filters
             searchTerm={searchTerm}
             onSearch={handleSearch}
@@ -309,18 +355,26 @@ export const Dashboard: React.FC = () => {
           />
         </motion.div>
 
-        <motion.div 
-          initial="hidden" 
-          animate="visible" 
-          variants={fadeIn} 
-          transition={{ delay: 0.3 }}
-        >
-          {error && (
-            <Alert variant="destructive" className="mb-6 border-red-200 bg-red-50">
-              <AlertDescription className="text-red-800">{error}</AlertDescription>
+        {/* Error Alert */}
+        {error && (
+          <motion.div initial="hidden" animate="visible" variants={fadeIn}>
+            <Alert variant="destructive" className="border-red-200 bg-red-50">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription className="text-red-800">
+                {error}
+                <button 
+                  onClick={() => setError(null)} 
+                  className="ml-2 underline hover:no-underline"
+                >
+                  Dismiss
+                </button>
+              </AlertDescription>
             </Alert>
-          )}
+          </motion.div>
+        )}
 
+        {/* URL Table */}
+        <motion.div initial="hidden" animate="visible" variants={fadeIn} transition={{ delay: 0.3 }}>
           <URLTable
             data={data}
             query={query}
@@ -332,6 +386,7 @@ export const Dashboard: React.FC = () => {
             onRegenerate={regenerateUrl}
             onExtend={extendUrl}
             onCreateNew={handleCreateNew}
+            isAtLimit={isAtLimit}
           />
         </motion.div>
       </main>

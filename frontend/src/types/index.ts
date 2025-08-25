@@ -1,6 +1,7 @@
 export interface CreateUrlRequest {
 	originalUrl: string;
 	expiresAt?: string;
+	uid?: string;
 }
 
 export interface User {
@@ -10,7 +11,6 @@ export interface User {
 	provider: 'GOOGLE' | 'GITHUB';
 	providerId: string;
 	createdAt: string;
-	updatedAt: string;
 }
 
 export interface AuthResponse {
@@ -34,21 +34,30 @@ export interface URLData {
 	clicks: number;
 	createdAt: string;
 	expiresAt: string | null;
-	isExpired: boolean;
+	get isExpired(): boolean;
 }
 
 export interface DashboardData {
-	currentPage: number;
 	urls: URLData[];
-	totalClicks: number;
-	totalUrls: number;
-	page: number;
-	limit: number;
-	totalPages: number;
+	pagination: {
+		currentPage: number;
+		totalPages: number;
+		totalUrls: number;
+		limit: number;
+	};
+	stats: {
+		totalClicks: number;
+	};
 }
 
 export interface DashboardStats {
 	totalUrls: number;
 	totalClicks: number;
 	activeUrls: number;
+	maxUrls?: number;
+}
+
+export interface ApiError {
+	message: string;
+	statusCode?: number;
 }
