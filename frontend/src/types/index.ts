@@ -1,7 +1,6 @@
 export interface CreateUrlRequest {
 	originalUrl: string;
 	expiresAt?: string;
-	uid?: string;
 }
 
 export interface User {
@@ -21,8 +20,8 @@ export interface AuthResponse {
 export interface DashboardQuery {
 	page?: number;
 	limit?: number;
-	sort?: 'createdAt' | 'expiresAt' | 'clickCount';
-	order?: 'asc' | 'desc';
+	sortBy?: 'createdAt' | 'expiresAt' | 'clickCount';
+	sortOrder?: 'asc' | 'desc';
 	filter?: 'all' | 'expired' | 'active';
 	search?: string;
 }

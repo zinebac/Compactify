@@ -2,12 +2,10 @@ import type React from 'react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-	BarChart3, 
-	Link2, 
+	BarChart3,
+	Link2,
 	User2,
 	LogOut,
-	Settings,
-	HelpCircle,
 	ChevronDown,
 	Menu,
 	X,
@@ -71,10 +69,11 @@ const Nav: React.FC<NavProps> = ({
 
 	const closeMenu = () => setIsMobileMenuOpen(false);
 
+	// Only include routes that actually exist in the router.
+	// /profile and /help are not yet implemented; adding them here would send
+	// users to the wildcard redirect (→ /) which feels like a broken app.
 	const menuItems = [
 		{ icon: BarChart3, label: 'Dashboard', path: '/dashboard' },
-		{ icon: Settings, label: 'Profile & Settings', path: '/profile' },
-		{ icon: HelpCircle, label: 'Help & Support', path: '/help' },
 	];
 
 	return (
@@ -148,14 +147,6 @@ const Nav: React.FC<NavProps> = ({
 											>
 												<BarChart3 size={16} />
 												Dashboard
-											</DropdownMenuItem>
-											
-											<DropdownMenuItem 
-												onClick={() => navigate('/help')}
-												className="gap-2 cursor-pointer hover:bg-gray-50"
-											>
-												<HelpCircle size={16} />
-												Help & Support
 											</DropdownMenuItem>
 											
 											<DropdownMenuSeparator />

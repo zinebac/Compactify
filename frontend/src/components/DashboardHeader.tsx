@@ -4,10 +4,9 @@ import {
   Download, 
   BarChart3, 
   RefreshCw,
-  AlertTriangle,
 } from 'lucide-react';
+import type { User } from '@/types';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,7 +15,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 interface DashboardHeaderProps {
-  user: any;
+  user: User | null;
   totalUrls: number;
   totalClicks: number;
   activeUrls: number;
@@ -29,8 +28,6 @@ interface DashboardHeaderProps {
 
 export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   user,
-  totalUrls,
-  maxUrls = 50,
   isAtLimit = false,
   onCreateNew,
   onExportData,
@@ -42,8 +39,6 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
     if (hour < 18) return 'Good afternoon';
     return 'Good evening';
   };
-
-  const usagePercentage = maxUrls > 0 ? (totalUrls / maxUrls) * 100 : 0;
 
   return (
     <div className="space-y-6">
@@ -57,32 +52,6 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
               <p className="text-gray-600 text-lg">
                 Manage your links and track their performance
               </p>
-              
-              {/* ✅ URL Usage Indicator */}
-              <div className="mt-4 space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600">URL Usage</span>
-                  <div className="flex items-center gap-2">
-                    <span className={`font-medium ${isAtLimit ? 'text-red-600' : usagePercentage > 80 ? 'text-yellow-600' : 'text-gray-900'}`}>
-                      {totalUrls} / {maxUrls}
-                    </span>
-                    {isAtLimit && <AlertTriangle size={16} className="text-red-500" />}
-                  </div>
-                </div>
-                <Progress 
-                  value={usagePercentage} 
-                  className={`w-64 h-2 ${
-                    isAtLimit ? 'bg-red-100' : 
-                    usagePercentage > 80 ? 'bg-yellow-100' : 
-                    'bg-gray-100'
-                  }`}
-                />
-                {isAtLimit && (
-                  <p className="text-xs text-red-600 mt-1">
-                    Limit reached. Delete some URLs to create new ones.
-                  </p>
-                )}
-              </div>
             </div>
           </div>
         </div>

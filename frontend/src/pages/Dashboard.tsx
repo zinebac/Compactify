@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import type { DashboardData, DashboardQuery, DashboardStats, URLData } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -31,11 +31,10 @@ export const Dashboard: React.FC = () => {
   const [query, setQuery] = useState<DashboardQuery>({
     page: 1,
     limit: 10,
-    sort: 'createdAt',
-    order: 'desc',
+    sortBy: 'createdAt',
+    sortOrder: 'desc',
     filter: 'all'
   });
-  const [searchTerm, setSearchTerm] = useState<string>('');
   const { isAuthenticated, user, logout } = useAuth();
 
   const dashboardStats: DashboardStats = useMemo(() => {
@@ -65,42 +64,53 @@ export const Dashboard: React.FC = () => {
     return dashboardStats.totalUrls >= URL_LIMITS.MAX_URLS_PER_USER;
   }, [dashboardStats.totalUrls]);
 
-  async function fetchDashboard(query: DashboardQuery): Promise<void> {
+  /**
+   * Fetches dashboard data for the current query and stores it in state.
+   * Redirects to /auth automatically on a 401 (session expired).
+   *
+   * Wrapped in `useCallback` so its reference stays stable between renders,
+   * allowing it to be listed as a dependency of the `useEffect` below without
+   * triggering an infinite re-fetch loop.
+   */
+  const fetchDashboard = useCallback(async (q: DashboardQuery): Promise<void> => {
     try {
       setIsLoading(true);
       setError(null);
-      
-      const response = await apiService.getDashboardData(query);
-      
+
+      const response = await apiService.getDashboardData(q);
+
       if (response) {
         setData(response);
       } else {
         setData(null);
         setError('No data found for the given query.');
       }
-    } catch (error: any) {
-      console.error('Error fetching dashboard:', error);
-      
-      if (error.statusCode === 401) {
+    } catch (err) {
+      const apiErr = err as { statusCode?: number; message?: string };
+      console.error('Error fetching dashboard:', apiErr);
+
+      if (apiErr.statusCode === 401) {
         setError('Your session has expired. Please sign in again.');
-        // Optionally redirect to auth
         setTimeout(() => navigate('/auth'), 3000);
       } else {
-        setError(error.message || 'Failed to fetch dashboard data.');
+        setError(apiErr.message || 'Failed to fetch dashboard data.');
       }
     } finally {
       setIsLoading(false);
     }
-  }
+  }, [navigate]);
 
   useEffect(() => {
     if (isAuthenticated) {
       fetchDashboard(query);
     }
-  }, [query, isAuthenticated]);
+  }, [query, isAuthenticated, fetchDashboard]);
 
+  /**
+   * Updates the search query and resets to page 1.
+   * `query.search` is the single source of truth — no separate searchTerm state.
+   */
   const handleSearch = (term: string): void => {
-    setSearchTerm(term);
     setQuery(prev => ({ ...prev, search: term, page: 1 }));
   };
 
@@ -109,11 +119,11 @@ export const Dashboard: React.FC = () => {
     setQuery(prev => ({ ...prev, filter: value, page: 1 }));
   };
 
-  const handleSort = (sortBy: DashboardQuery['sort']): void => {
+  const handleSort = (sortBy: DashboardQuery['sortBy']): void => {
     setQuery(prev => ({
       ...prev,
       sortBy,
-      sortOrder: prev.sort === sortBy && prev.order === 'desc' ? 'asc' : 'desc',
+      sortOrder: prev.sortBy === sortBy && prev.sortOrder === 'desc' ? 'asc' : 'desc',
       page: 1
     }));
   };
@@ -130,26 +140,43 @@ export const Dashboard: React.FC = () => {
     navigate('/');
   };
 
+  /**
+   * Exports the currently loaded URL data as a CSV file.
+   *
+   * Each field is wrapped in double-quotes and internal double-quotes are
+   * escaped by doubling them (RFC 4180) to prevent formula injection and
+   * broken CSV when URLs contain commas or quotes.
+   */
   const handleExportData = async (): Promise<void> => {
+    /** Wraps a value in quotes and escapes any embedded double-quotes. */
+    const csvField = (value: string): string => `"${value.replace(/"/g, '""')}"`;
+
     try {
       const csvHeader = 'Original URL,Short URL,Clicks,Created At,Expires At,Status\n';
-      const csvData = data?.urls?.map((url: URLData) => 
-        `"${url.originalUrl}","${url.shortenedUrl}",${url.clicks},"${url.createdAt}","${url.expiresAt || 'Never'}","${url.isExpired ? 'Expired' : 'Active'}"`
-      ).join('\n') || '';
-      
+      const csvData = data?.urls?.map((url: URLData) =>
+        [
+          csvField(url.originalUrl),
+          csvField(url.shortenedUrl),
+          url.clicks,
+          csvField(url.createdAt),
+          csvField(url.expiresAt ?? 'Never'),
+          csvField(url.isExpired ? 'Expired' : 'Active'),
+        ].join(',')
+      ).join('\n') ?? '';
+
       const csvContent = csvHeader + csvData;
       const blob = new Blob([csvContent], { type: 'text/csv' });
-      const url = window.URL.createObjectURL(blob);
-      
+      const blobUrl = window.URL.createObjectURL(blob);
+
       const link = document.createElement('a');
-      link.href = url;
+      link.href = blobUrl;
       link.download = `url-data-${new Date().toISOString().split('T')[0]}.csv`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('Export failed:', error);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      console.error('Export failed:', err);
       setError('Failed to export data. Please try again.');
     }
   };
@@ -167,7 +194,6 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  // ✅ Enhanced URL Management Actions with better error handling
   const deleteUrl = async (id: string): Promise<void> => {
     try {
       await apiService.deleteUrl(id);
@@ -186,9 +212,10 @@ export const Dashboard: React.FC = () => {
       });
       
       setError(null); // Clear any existing errors
-    } catch (error: any) {
-      console.error('Failed to delete URL:', error);
-      setError(error.message || 'Failed to delete URL. Please try again.');
+    } catch (err) {
+      const apiErr = err as { message?: string };
+      console.error('Failed to delete URL:', apiErr);
+      setError(apiErr.message || 'Failed to delete URL. Please try again.');
     }
   };
 
@@ -208,9 +235,10 @@ export const Dashboard: React.FC = () => {
         });
         setError(null);
       }
-    } catch (error: any) {
-      console.error('Failed to regenerate URL:', error);
-      setError(error.message || 'Failed to regenerate URL. Please try again.');
+    } catch (err) {
+      const apiErr = err as { message?: string };
+      console.error('Failed to regenerate URL:', apiErr);
+      setError(apiErr.message || 'Failed to regenerate URL. Please try again.');
     }
   };
 
@@ -230,59 +258,88 @@ export const Dashboard: React.FC = () => {
         });
         setError(null);
       }
-    } catch (error: any) {
-      console.error('Failed to extend URL:', error);
-      setError(error.message || 'Failed to extend URL lifetime. Please try again.');
+    } catch (err) {
+      const apiErr = err as { message?: string };
+      console.error('Failed to extend URL:', apiErr);
+      setError(apiErr.message || 'Failed to extend URL lifetime. Please try again.');
     }
   };
 
+  /**
+   * Deletes multiple URLs in parallel.
+   *
+   * Uses `Promise.allSettled` so a failure on one URL does not abort the
+   * others. Only successfully deleted IDs are removed from local state, and
+   * the user is informed of any partial failures.
+   */
   const handleBulkDelete = async (urls: string[]): Promise<void> => {
     if (urls.length === 0) return;
 
-    try {
-      await Promise.all(urls.map(id => apiService.deleteUrl(id)));
-      
-      setData((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          urls: prev.urls.filter((url: URLData) => !urls.includes(url.id)),
-          pagination: {
-            ...prev.pagination,
-            totalUrls: prev.pagination.totalUrls - urls.length,
-          },
-        };
-      });
-      
-      setError(null);
-    } catch (error: any) {
-      console.error('Bulk delete failed:', error);
-      setError(error.message || 'Failed to delete selected URLs. Please try again.');
-    }
+    const results = await Promise.allSettled(urls.map(id => apiService.deleteUrl(id)));
+
+    // Identify which IDs actually succeeded
+    const succeeded = urls.filter((_, i) => results[i].status === 'fulfilled');
+    const failCount = urls.length - succeeded.length;
+
+    setData((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        urls: prev.urls.filter((url: URLData) => !succeeded.includes(url.id)),
+        pagination: {
+          ...prev.pagination,
+          totalUrls: prev.pagination.totalUrls - succeeded.length,
+        },
+      };
+    });
+
+    setError(
+      failCount > 0
+        ? `${failCount} URL(s) could not be deleted. Please try again.`
+        : null,
+    );
   };
 
+  /**
+   * Regenerates short codes for multiple URLs in parallel.
+   *
+   * Uses `Promise.allSettled` so a failure on one URL does not abort the
+   * others. Only successfully regenerated entries are updated in local state.
+   */
   const handleBulkRegenerate = async (urls: string[]): Promise<void> => {
     if (urls.length === 0) return;
 
-    try {
-      const responses = await Promise.all(urls.map(id => apiService.regenerateUrl(id)));
-      
-      setData((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          urls: prev.urls.map((url: URLData) => {
-            const response = responses.find(r => r.id === url.id);
-            return response ? { ...url, shortenedUrl: response.shortenedUrl } : url;
-          }),
-        };
-      });
-      
-      setError(null);
-    } catch (error: any) {
-      console.error('Bulk regenerate failed:', error);
-      setError(error.message || 'Failed to regenerate selected URLs. Please try again.');
-    }
+    const results = await Promise.allSettled(urls.map(id => apiService.regenerateUrl(id)));
+
+    // Build a map of id → new shortenedUrl for succeeded requests
+    const successMap = new Map<string, string>();
+    let failCount = 0;
+
+    urls.forEach((id, i) => {
+      const result = results[i];
+      if (result.status === 'fulfilled' && result.value?.shortenedUrl) {
+        successMap.set(id, result.value.shortenedUrl);
+      } else {
+        failCount++;
+      }
+    });
+
+    setData((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        urls: prev.urls.map((url: URLData) => {
+          const newShortUrl = successMap.get(url.id);
+          return newShortUrl ? { ...url, shortenedUrl: newShortUrl } : url;
+        }),
+      };
+    });
+
+    setError(
+      failCount > 0
+        ? `${failCount} URL(s) could not be regenerated. Please try again.`
+        : null,
+    );
   };
 
   if (isLoading && !data) {
@@ -301,7 +358,7 @@ export const Dashboard: React.FC = () => {
       <Nav isAuthenticated={isAuthenticated} user={user} handleLogout={handleLogout} />
 
       <main className="container mx-auto px-4 py-8 space-y-8">
-        {/* ✅ URL Limit Warning */}
+        {/* URL Limit Warning */}
         {isNearLimit && (
           <motion.div initial="hidden" animate="visible" variants={fadeIn}>
             <Alert 
@@ -337,7 +394,6 @@ export const Dashboard: React.FC = () => {
         {/* Stats Cards */}
         <motion.div initial="hidden" animate="visible" variants={fadeIn} transition={{ delay: 0.1 }}>
           <StatsCards
-            user={user}
             totalUrls={dashboardStats.totalUrls}
             totalClicks={dashboardStats.totalClicks}
             activeUrls={dashboardStats.activeUrls}
@@ -348,7 +404,7 @@ export const Dashboard: React.FC = () => {
         {/* Filters */}
         <motion.div initial="hidden" animate="visible" variants={fadeIn} transition={{ delay: 0.2 }}>
           <Filters
-            searchTerm={searchTerm}
+            searchTerm={query.search ?? ''}
             onSearch={handleSearch}
             filter={query.filter}
             onFilterChange={handleFilter}

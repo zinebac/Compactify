@@ -23,7 +23,7 @@ export const Filters: React.FC<FiltersProps> = ({
   };
 
   return (
-    <Card className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 border-blue-200 shadow-md hover:shadow-lg transition-shadow duration-300">
+    <Card className="bg-white shadow-md hover:shadow-lg transition-shadow duration-300">
       <CardContent className="p-6">
         <div className="flex flex-col md:flex-row gap-4">
           {/* Search Input */}

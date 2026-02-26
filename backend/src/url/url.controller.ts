@@ -1,5 +1,5 @@
-import { BadRequestException, Body, Controller, Delete, Get, Logger, NotFoundException, Param, Post, Put, Query, Req, Res, UseGuards } from '@nestjs/common';
-import { SkipThrottle, Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { BadRequestException, Body, Controller, Delete, Get, HttpException, Logger, NotFoundException, Param, Post, Put, Query, Req, Res, UnauthorizedException, UseGuards } from '@nestjs/common';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { UrlService } from './url.service';
 import { CreateUrlDto } from './dto/create-url.dto';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
@@ -18,13 +18,14 @@ export class UrlController {
 		try {
 			return await this.urlService.createAnonymousUrl(url);
 		} catch (error) {
+			if (error instanceof HttpException) throw error;
 			throw new BadRequestException(error.message);
 		}
 	}
 	
 	@Get('dashboard')
 	@UseGuards(JwtAuthGuard)
-	@SkipThrottle()
+	@Throttle({ default: { limit: 60, ttl: 60000 } })
 	async getDashboard(
 		@Req() req,
 		@Query() query: DashboardQueryDto,
@@ -33,16 +34,17 @@ export class UrlController {
 			const userId = req.user?.id;
 			this.logger.log(`Dashboard query: ${JSON.stringify(query)}, uid: ${userId}`);
 			if (!userId) {
-				throw new BadRequestException('User not authenticated');
+				throw new UnauthorizedException('User not authenticated');
 			}
 			return await this.urlService.getDashboard(userId, query);
 		} catch (error) {
+			if (error instanceof HttpException) throw error;
 			throw new BadRequestException(error.message);
 		}
 	}
 	
 	@Get(':shortCode')
-	@SkipThrottle()
+	@Throttle({ default: { limit: 120, ttl: 60000 } })
 	async getUrl(@Param('shortCode') shortCode: string, @Res() res) {
 		try {
 			const url = await this.urlService.getUrl(shortCode);
@@ -56,11 +58,16 @@ export class UrlController {
 
 	@Post('create')
 	@UseGuards(JwtAuthGuard)
-	@SkipThrottle()
-	async createUrl(@Body() url: CreateUrlDto) {
+	@Throttle({ default: { limit: 20, ttl: 60000 } })
+	async createUrl(@Body() url: CreateUrlDto, @Req() req) {
 		try {
-			return await this.urlService.createAuthUrl(url);
+			const userId = req.user?.id;
+			if (!userId) {
+				throw new UnauthorizedException('User not authenticated');
+			}
+			return await this.urlService.createAuthUrl(url, userId);
 		} catch (error) {
+			if (error instanceof HttpException) throw error;
 			throw new BadRequestException(error.message);
 		}
 	}
@@ -71,10 +78,11 @@ export class UrlController {
 		try {
 			const userId = req.user?.id;
 			if (!userId) {
-				throw new BadRequestException('User not authenticated');
+				throw new UnauthorizedException('User not authenticated');
 			}
 			return await this.urlService.deleteAllUrl(userId);
 		} catch (error) {
+			if (error instanceof HttpException) throw error;
 			throw new BadRequestException(error.message);
 		}
 	}
@@ -85,10 +93,11 @@ export class UrlController {
 		try {
 			const userId = req.user?.id;
 			if (!userId) {
-				throw new BadRequestException('User not authenticated');
+				throw new UnauthorizedException('User not authenticated');
 			}
 			return await this.urlService.deleteUrl(userId, urlId);
 		} catch (error) {
+			if (error instanceof HttpException) throw error;
 			throw new BadRequestException(error.message);
 		}
 	}
@@ -99,10 +108,11 @@ export class UrlController {
 		try {
 			const userId = req.user?.id;
 			if (!userId) {
-				throw new BadRequestException('User not authenticated');
+				throw new UnauthorizedException('User not authenticated');
 			}
 			return await this.urlService.extendUrl(userId, urlId, dto.expiresAt);
 		} catch (error) {
+			if (error instanceof HttpException) throw error;
 			throw new BadRequestException(error.message);
 		}
 	}
@@ -113,10 +123,11 @@ export class UrlController {
 		try {
 			const userId = req.user?.id;
 			if (!userId) {
-				throw new BadRequestException('User not authenticated');
+				throw new UnauthorizedException('User not authenticated');
 			}
 			return await this.urlService.regenerateUrl(userId, urlId);
 		} catch (error) {
+			if (error instanceof HttpException) throw error;
 			throw new BadRequestException(error.message);
 		}
 	}

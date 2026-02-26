@@ -124,7 +124,7 @@ export class AuthController {
 	private setRefreshCookie(res: Response, refreshToken: string) {
 		res.cookie('refresh_token', refreshToken, {
 			httpOnly: true,
-			secure: true,
+			secure: process.env.NODE_ENV === 'production',
 			sameSite: 'lax',
 			path: '/',
 			maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
@@ -135,7 +135,19 @@ export class AuthController {
 		res.clearCookie('refresh_token');
 	}
 
+	private escapeHtml(str: string): string {
+		return str
+			.replace(/&/g, '&amp;')
+			.replace(/</g, '&lt;')
+			.replace(/>/g, '&gt;')
+			.replace(/"/g, '&quot;')
+			.replace(/'/g, '&#x27;');
+	}
+
 	private generateSuccessHTML(authData: any): string {
+		const safePayload = JSON.stringify({ accessToken: authData.accessToken, user: authData.user })
+			.replace(/</g, '\\u003c');
+		const safeFrontendUrl = JSON.stringify(process.env.FRONTEND_URL);
 		return `
 			<!DOCTYPE html>
 			<html>
@@ -144,16 +156,17 @@ export class AuthController {
 				</head>
 				<body>
 					<div style="text-align: center; padding: 50px; font-family: Arial, sans-serif;">
-						<h2>✅ Authentication Successful!</h2>
+						<h2>Authentication Successful!</h2>
 						<p>Closing window...</p>
 					</div>
 					<script>
 						if (window.opener) {
+							const data = ${safePayload};
 							window.opener.postMessage({
-							type: 'OAUTH_SUCCESS',
-							accessToken: '${authData.accessToken}',
-							user: ${JSON.stringify(authData.user)}
-							}, '${process.env.FRONTEND_URL}');
+								type: 'OAUTH_SUCCESS',
+								accessToken: data.accessToken,
+								user: data.user
+							}, ${safeFrontendUrl});
 						}
 						setTimeout(() => window.close(), 1000);
 					</script>
@@ -163,28 +176,30 @@ export class AuthController {
 	}
 
 	private generateErrorHTML(error: string): string {
-	return `
-		<!DOCTYPE html>
-		<html>
-			<head>
-				<title>Authentication Failed</title>
-			</head>
-			<body>
-				<div style="text-align: center; padding: 50px; font-family: Arial, sans-serif;">
-					<h2>❌ Authentication Failed</h2>
-					<p>${error}</p>
-				</div>
-				<script>
-					if (window.opener) {
-						window.opener.postMessage({
-						type: 'OAUTH_ERROR',
-						error: '${error}'
-						}, '${process.env.FRONTEND_URL}');
-					}
-					setTimeout(() => window.close(), 2000);
-				</script>
-			</body>
-		</html>
-	`;
+		const safeErrorJson = JSON.stringify(error).replace(/</g, '\\u003c');
+		const safeFrontendUrl = JSON.stringify(process.env.FRONTEND_URL);
+		return `
+			<!DOCTYPE html>
+			<html>
+				<head>
+					<title>Authentication Failed</title>
+				</head>
+				<body>
+					<div style="text-align: center; padding: 50px; font-family: Arial, sans-serif;">
+						<h2>Authentication Failed</h2>
+						<p>${this.escapeHtml(error)}</p>
+					</div>
+					<script>
+						if (window.opener) {
+							window.opener.postMessage({
+								type: 'OAUTH_ERROR',
+								error: ${safeErrorJson}
+							}, ${safeFrontendUrl});
+						}
+						setTimeout(() => window.close(), 2000);
+					</script>
+				</body>
+			</html>
+		`;
 	}
 }

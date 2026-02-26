@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { formatDate } from '@/utils/dateUtils';
 import { Clock, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -41,16 +42,6 @@ export const ExtendDialog: React.FC<ExtendURLDialogProps> = ({
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  const formatDate = (dateString: string): string => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
   const getNewExpiryDate = (): Date | null => {
     if (!url.expiresAt) return null;
     const currentExpiry = new Date(url.expiresAt);
@@ -64,9 +55,10 @@ export const ExtendDialog: React.FC<ExtendURLDialogProps> = ({
     try {
       await onExtend(url.id, extendDuration);
       onOpenChange(false);
-    } catch (error: any) {
-      console.error('Failed to extend URL lifetime:', error);
-      setError(error.message || 'Failed to extend URL lifetime. Please try again.');
+    } catch (err) {
+      const apiErr = err as { message?: string };
+      console.error('Failed to extend URL lifetime:', apiErr);
+      setError(apiErr.message || 'Failed to extend URL lifetime. Please try again.');
     } finally {
       setIsLoading(false);
     }

@@ -44,21 +44,16 @@ export const Auth: React.FC = () => {
 	const handleLogin = async (provider: 'google' | 'github') => {
 		try {
 			setError(null);
-			setAuthStep('authenticating');
-			// console.log(`Starting ${provider} login...`);
-			
+			setAuthStep('authenticating');			
 			await login(provider);
-			
 			setAuthStep('success');
-			// console.log('Login successful');
 			
-			// Add delay for success animation
+			// Brief delay to show the success animation before navigating
 			setTimeout(() => {
-				navigate('/Home');
+				navigate('/dashboard');
 			}, 1500);
 			
 		} catch (error) {
-			// console.error(`${provider} login failed:`, error);
 			setError(error instanceof Error ? error.message : 'Login failed');
 			setAuthStep('idle');
 		}

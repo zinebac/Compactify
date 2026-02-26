@@ -35,33 +35,41 @@ const staggerContainer = {
 
 export default function Home() {
 	
-	const [err, setErr] = useState<string | null>(null);
 	const [originalUrl, setOriginalUrl] = useState('');
 	const [shortenedUrl, setShortenedUrl] = useState('');
 	const [copied, setCopied] = useState(false);
 	const [showAdvanced, setShowAdvanced] = useState(false);
 	const [expiresAt, setExpiresAt] = React.useState<string>('');
-	
+
+	// `error` from the hook is the single source of truth for form errors.
+	// `clearError` is called when the user starts editing the URL so stale
+	// error messages disappear immediately.
 	const { createUrl, isLoading, error, clearError } = useCreateUrl();
 	const { isAuthenticated, user, logout } = useAuth();
 	const navigate = useNavigate();
 
+	/** Clears the result and any previous error when the user edits the URL. */
 	const handleUrlChange = (url: string) => {
-	setOriginalUrl(url);
-	setShortenedUrl('');
-	setCopied(false);
+		setOriginalUrl(url);
+		setShortenedUrl('');
+		setCopied(false);
+		clearError();
 	};
 
+	/**
+	 * Submits the URL shortening request.
+	 * On success: stores the shortened URL and resets the input fields.
+	 * On failure: the hook sets `error` which renders below the input automatically.
+	 */
 	const shortenUrl = async () => {
-		const result: any = await createUrl(originalUrl, user?.id, expiresAt);
+		const result = await createUrl(originalUrl, isAuthenticated, expiresAt);
 		if (result) {
 			setShortenedUrl(result.shortenedUrl);
-			clearError();
+			setOriginalUrl('');
+			setExpiresAt('');
+			setShowAdvanced(false);
 		} else {
 			setShortenedUrl('');
-			if (error) {
-				setErr(error);
-			}
 		}
 	};
 
@@ -71,14 +79,18 @@ export default function Home() {
 		setTimeout(() => setCopied(false), 2000);
 	};
 
+	/** Signs the user out and resets all local form state. */
 	const handleLogout = async () => {
-		logout().then(() => {
+		try {
+			await logout();
+		} catch (err) {
+			console.error('Logout failed:', err);
+		} finally {
 			setOriginalUrl('');
 			setShortenedUrl('');
 			setCopied(false);
-			setErr(null);
-		});
-	}
+		}
+	};
 
 	return (
 		<div className="flex flex-col min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
@@ -135,7 +147,7 @@ export default function Home() {
 									className="h-12 text-base"
 								/>
 
-								{err && (
+								{error && (
 									<motion.div
 										initial={{ opacity: 0, height: 0 }}
 										animate={{ opacity: 1, height: 'auto' }}
@@ -348,9 +360,11 @@ export default function Home() {
 													Your shortened URL:
 												</p>
 
+												{isAuthenticated && (
 												<p className="text-xs text-green-700">
 													✓ URL saved to your account.{' '}
-												</p>									
+												</p>
+											)}									
 											</div>
 
 											<div className="flex items-center space-x-2">

@@ -1,4 +1,4 @@
-import { IsDateString, IsNotEmpty, IsOptional, IsString, IsUrl, IsUUID } from 'class-validator';
+import { IsDateString, IsNotEmpty, IsString, IsUrl, IsOptional } from 'class-validator';
 
 export class CreateUrlDto {
 	@IsString()
@@ -9,8 +9,4 @@ export class CreateUrlDto {
 	@IsOptional()
 	@IsDateString()
 	expiresAt?: string;
-
-	@IsUUID()
-	@IsOptional()
-	uid?: string;
 }

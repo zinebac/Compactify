@@ -1,5 +1,3 @@
-"use client"
-
 import * as React from "react"
 import { ChevronDownIcon, Calendar as Cal } from "lucide-react"
 
@@ -11,75 +9,63 @@ import {
 	PopoverTrigger,
 } from "@/components/ui/popover"
 
-export const Calendar: React.FC<{
-	setExpiresAt: React.Dispatch<React.SetStateAction<string>>,
-	expiresAt: string,
-}> = ({
+interface CalendarPickerProps {
+	/** ISO date string (YYYY-MM-DD) currently selected, or empty string for none. */
+	expiresAt: string;
+	/** Setter from the parent's `useState` — called with the new ISO date string. */
+	setExpiresAt: React.Dispatch<React.SetStateAction<string>>;
+}
+
+/**
+ * Date-picker popover used for selecting a URL expiry date.
+ *
+ * Only future dates are selectable; the picker is capped 10 years ahead.
+ * Selecting a date closes the popover automatically.
+ */
+export const Calendar: React.FC<CalendarPickerProps> = ({
 	setExpiresAt,
 	expiresAt,
 }) => {
 	const [open, setOpen] = React.useState(false)
 
-	// Get today's date and set time to start of day for accurate comparison
+	// Midnight today — used to disable past dates in the picker
 	const today = new Date()
 	today.setHours(0, 0, 0, 0)
 
-	// Get current year and calculate year range
-	const currentYear = new Date().getFullYear()
-	const maxYear = currentYear + 10
+	const now = new Date()
+	// Navigation starts at the current month and ends 10 years ahead
+	const startMonth = new Date(now.getFullYear(), now.getMonth())
+	const endMonth = new Date(now.getFullYear() + 10, 11) // December of +10 years
 
-	// Set month range - start from current month of current year
-	const fromMonth = new Date(currentYear, new Date().getMonth())
-
-	// Disable past dates
-	const disablePastDates = (date: Date) => {
-		return date < today
-	}
+	const disablePastDates = (date: Date) => date < today
 
 	return (
-		<div className="flex gap-4">
-			<div className="flex flex-col gap-3">
-				<Popover open={open} onOpenChange={setOpen}>
-					<PopoverTrigger asChild>
-						<Button
-							variant="outline"
-							id="date-picker"
-							className="justify-between font-normal"
-						>
-							<Cal size={16} className="text-gray-400" />
-							{expiresAt ? expiresAt : "Select date"}
-							<ChevronDownIcon />
-						</Button>
-					</PopoverTrigger>
-					<PopoverContent className="w-auto overflow-hidden p-0" align="start">
-						<Calen
-							mode="single"
-							selected={new Date(expiresAt)}
-							captionLayout="dropdown"
-							fromYear={currentYear}
-							toYear={maxYear}
-							fromMonth={fromMonth}
-							disabled={disablePastDates}
-							onSelect={(date) => {
-								setExpiresAt(date ? date.toISOString().split("T")[0] : "")
-								setOpen(false)
-							}}
-						/>
-					</PopoverContent>
-				</Popover>
-			</div>
-			{/* <div className="flex flex-col gap-3">
-				<Label htmlFor="time-picker" className="px-1">
-					Time
-				</Label>
-				<Input
-					type="time"
-					id="time-picker"
-					step="1"
-					defaultValue="10:30:00"
-					className="bg-background appearance-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none"
+		<Popover open={open} onOpenChange={setOpen}>
+			<PopoverTrigger asChild>
+				<Button
+					variant="outline"
+					id="date-picker"
+					className="justify-between font-normal"
+				>
+					<Cal size={16} className="text-gray-400" />
+					{expiresAt ? expiresAt : "Select date"}
+					<ChevronDownIcon />
+				</Button>
+			</PopoverTrigger>
+			<PopoverContent className="w-auto overflow-hidden p-0" align="start">
+				<Calen
+					mode="single"
+					selected={expiresAt ? new Date(expiresAt) : undefined}
+					captionLayout="dropdown"
+					startMonth={startMonth}
+					endMonth={endMonth}
+					disabled={disablePastDates}
+					onSelect={(date) => {
+						setExpiresAt(date ? date.toISOString().split("T")[0] : "")
+						setOpen(false)
+					}}
 				/>
-			</div> */}
-		</div>
+			</PopoverContent>
+		</Popover>
 	)
 }

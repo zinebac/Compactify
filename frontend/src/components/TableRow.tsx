@@ -1,15 +1,16 @@
-import React, { useState } from 'react';
-import { 
-  Copy, 
-  Trash2, 
-  RefreshCw, 
-  ExternalLink, 
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  Copy,
+  Trash2,
+  RefreshCw,
+  ExternalLink,
   BarChart3,
   Activity,
   CalendarPlus,
   MoreHorizontal,
   Clock,
-  TrendingUp
+  TrendingUp,
+  AlertTriangle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -23,8 +24,17 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { ExtendDialog } from './ExtendDialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import type { URLData } from '@/types';
+import { formatDate } from '@/utils/dateUtils';
 
 interface TableRowProps {
   url: URLData;
@@ -49,7 +59,23 @@ export const TableRow: React.FC<TableRowProps> = ({
 }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [extendDialogOpen, setExtendDialogOpen] = useState<boolean>(false);
+  const [regenerateDialogOpen, setRegenerateDialogOpen] = useState<boolean>(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  /**
+   * Ref to the active "Copied!" reset timer.
+   * Stored in a ref (not state) so clearing it never triggers a re-render,
+   * and so the cleanup effect always has access to the latest timer ID.
+   */
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clear the copy-feedback timer when the row unmounts to avoid calling
+  // setState on an unmounted component.
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+    };
+  }, []);
 
   const handleOpenUrl = (url: string): void => {
     try {
@@ -57,16 +83,6 @@ export const TableRow: React.FC<TableRowProps> = ({
     } catch (error) {
       console.error('Failed to open URL:', error);
     }
-  };
-
-  const formatDate = (dateString: string): string => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
   };
 
   const getTimeUntilExpiry = (expiryDate: string | null): string | null => {
@@ -100,7 +116,9 @@ export const TableRow: React.FC<TableRowProps> = ({
     try {
       await navigator.clipboard.writeText(url.shortenedUrl);
       setCopiedId(url.id);
-      setTimeout(() => setCopiedId(null), 2000);
+      // Cancel any previous timer before starting a new one
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+      copyTimeoutRef.current = setTimeout(() => setCopiedId(null), 2000);
     } catch (error) {
       console.error('Failed to copy to clipboard:', error);
     }
@@ -120,13 +138,11 @@ export const TableRow: React.FC<TableRowProps> = ({
     }
   };
 
-  const handleRegenerate = async (): Promise<void> => {
-    const confirmed = window.confirm('Are you sure you want to regenerate this URL? The old short URL will no longer work.');
-    if (!confirmed) return;
-
+  const confirmRegenerate = async (): Promise<void> => {
     setActionLoading('regenerate');
     try {
       await onRegenerate(url.id);
+      setRegenerateDialogOpen(false);
     } catch (error) {
       console.error('Failed to regenerate URL:', error);
     } finally {
@@ -134,7 +150,7 @@ export const TableRow: React.FC<TableRowProps> = ({
     }
   };
 
-  // ✅ Enhanced extend handler
+  // extend handler
   const handleExtend = async (urlId: string, hours: number): Promise<void> => {
     setActionLoading('extend');
     try {
@@ -154,11 +170,12 @@ export const TableRow: React.FC<TableRowProps> = ({
   const expiryStatus = getExpiryStatus(url.expiresAt);
   const timeUntilExpiry = getTimeUntilExpiry(url.expiresAt);
 
-  // ✅ Calculate if URL is expired using the getter
+  // Calculate if URL is expired using the getter
   const isExpired = url.isExpired;
 
   return (
-    <TableR 
+    <>
+    <TableR
       className={cn(
         "border-b border-gray-100 transition-all duration-200 hover:shadow-md group",
         isSelected && "bg-blue-50 border-blue-200 shadow-sm",
@@ -358,8 +375,8 @@ export const TableRow: React.FC<TableRowProps> = ({
               </DropdownMenuItem>
               
               {!isExpired && (
-                <DropdownMenuItem 
-                  onClick={handleRegenerate} 
+                <DropdownMenuItem
+                  onClick={() => setTimeout(() => setRegenerateDialogOpen(true), 0)}
                   disabled={actionLoading === 'regenerate'}
                   className="gap-2 cursor-pointer hover:bg-blue-50 focus:bg-blue-50 py-3"
                 >
@@ -391,5 +408,43 @@ export const TableRow: React.FC<TableRowProps> = ({
         </div>
       </TableCell>
     </TableR>
+
+    <Dialog open={regenerateDialogOpen} onOpenChange={setRegenerateDialogOpen}>
+      <DialogContent className="sm:max-w-md" showCloseButton={false}>
+        <DialogHeader>
+          <div className="flex items-center gap-3 mb-1">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100">
+              <AlertTriangle className="h-5 w-5 text-amber-600" />
+            </div>
+            <DialogTitle>Regenerate short code?</DialogTitle>
+          </div>
+          <DialogDescription>
+            A new short URL will be generated for this link. Anyone using the old short URL will receive a 404.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => setRegenerateDialogOpen(false)}
+            disabled={actionLoading === 'regenerate'}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={confirmRegenerate}
+            disabled={actionLoading === 'regenerate'}
+            className="bg-amber-500 hover:bg-amber-600 text-white"
+          >
+            {actionLoading === 'regenerate' ? (
+              <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
+            Regenerate
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 };

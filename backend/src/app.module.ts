@@ -4,7 +4,6 @@ import { PrismaModule } from './prisma/prisma.module';
 import { Module } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
-import { PrismaService } from './prisma/prisma.service';
 
 @Module({
   imports: [
@@ -22,9 +21,6 @@ import { PrismaService } from './prisma/prisma.service';
     }),
   ],
   controllers: [],
-  providers: [
-    PrismaService,
-  ],
-  exports: [PrismaService],
+  providers: [],
 })
 export class AppModule { }

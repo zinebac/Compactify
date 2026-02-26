@@ -110,7 +110,7 @@ export class UrlService {
 			this.isValidUrl(originalUrl);
 	
 			const shortCode = await this.generateUniqueShortCode(originalUrl);
-			const expiresAtDate = new Date(Date.now() + URL_CONFIG.ANONYMOUS_EXPIRY_DAYS);
+			const expiresAtDate = new Date(Date.now() + URL_CONFIG.ANONYMOUS_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
 			
 			const urlData = await this.prisma.url.create({
 				data: {
@@ -147,14 +147,12 @@ export class UrlService {
 
 				if (url.expiresAt && new Date(url.expiresAt) < new Date()) throw new Error('Expired URL');
 
-				const update = tx.url.update({
+				await tx.url.update({
 					where: { shortCode },
 					data: {
 						clickCount: (url.clickCount || 0) + 1,
 					},
 				});
-
-				if (!update) throw new Error('Failed to update url');
 
 				return url;
 			})
@@ -167,9 +165,9 @@ export class UrlService {
 		}
 	}
 
-	async createAuthUrl(url: CreateUrlDto) {
+	async createAuthUrl(url: CreateUrlDto, uid: string) {
 		try {
-			const { originalUrl, expiresAt, uid } = url;
+			const { originalUrl, expiresAt } = url;
 			this.isValidUrl(originalUrl);
 
 			if (expiresAt && new Date(expiresAt) <= new Date()) {
@@ -278,58 +276,32 @@ export class UrlService {
 	}
 
 	async deleteAllUrl (uid: string) {
-		try {
-			const url = await this.prisma.url.deleteMany({
-				where: {
-					userId: uid,
-				},
-			})
+		const result = await this.prisma.url.deleteMany({
+			where: { userId: uid },
+		});
 
-			if (!url) {
-				throw new NotFoundException('URL not found');
-			}
-
-			// this.logger.log(`URLs deleted successfully for user ${uid}`);
-			return { message: 'URL deleted successfully' };
-
-		} catch (error) {
-			// this.logger.error(error.message)
-			if (error instanceof NotFoundException) {
-				throw new NotFoundException('No URLs found for deletion');
-			}
-			throw new BadRequestException('Error deleting URLs');
+		if (result.count === 0) {
+			throw new NotFoundException('No URLs found for deletion');
 		}
+
+		return { message: 'URLs deleted successfully' };
 	}
 
 	async deleteUrl (uid: string, urlId: string) {
-		try {
+		const result = await this.prisma.url.deleteMany({
+			where: { id: urlId, userId: uid },
+		});
 
-			const url = await this.prisma.url.deleteMany({
-				where: {
-					id: urlId,
-					userId: uid,
-				}
-			})
-
-			if (!url) {
-				throw new NotFoundException('URL not found');
-			}
-
-			// this.logger.log(`URL with ID ${urlId} deleted successfully for user ${uid}`);
-			return { message: 'URL deleted successfully' };
-
-		} catch (error) {
-			this.logger.error(error.message)
-			if (error instanceof NotFoundException) {
-				throw new NotFoundException('URL not found');
-			}
-			throw new BadRequestException('Error deleting URL');
+		if (result.count === 0) {
+			throw new NotFoundException('URL not found');
 		}
+
+		return { message: 'URL deleted successfully' };
 	}
 
 	async extendUrl(uid: string, urlId: string, expiresAt: string) {
 		try {
-			const url = await this.prisma.url.findUnique({
+			const url = await this.prisma.url.findFirst({
 				where: { id: urlId, userId: uid },
 			})
 
@@ -343,7 +315,7 @@ export class UrlService {
 
 			const expiresAtDate = new Date(expiresAt);
 			const updatedUrl = await this.prisma.url.update({
-				where: { id: urlId, userId: uid },
+				where: { id: urlId },
 				data: {
 					expiresAt: expiresAtDate,
 				},
@@ -364,7 +336,7 @@ export class UrlService {
 
 	async regenerateUrl(uid: string, urlId: string) {
 		try {
-			const url = await this.prisma.url.findUnique({
+			const url = await this.prisma.url.findFirst({
 				where: { id: urlId, userId: uid },
 			})
 
@@ -374,7 +346,7 @@ export class UrlService {
 
 			const newShortCode = await this.generateUniqueShortCode(url.originalUrl);
 			const updatedUrl = await this.prisma.url.update({
-				where: { id: urlId, userId: uid },
+				where: { id: urlId },
 				data: {
 					shortCode: newShortCode,
 				},

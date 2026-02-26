@@ -15,10 +15,9 @@ describe('AppController (e2e)', () => {
     await app.init();
   });
 
-  it('/ (GET)', () => {
+  it('/url/nonexistent (GET) returns 404', () => {
     return request(app.getHttpServer())
-      .get('/')
-      .expect(200)
-      .expect('Hello World!');
+      .get('/url/nonexistent')
+      .expect(404);
   });
 });

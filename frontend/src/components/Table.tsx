@@ -11,6 +11,14 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
@@ -23,7 +31,7 @@ import type { DashboardQuery, DashboardData, URLData } from '@/types';
 interface URLTableProps {
   data: DashboardData | null;
   query: DashboardQuery;
-  onSort: (sortBy: DashboardQuery['sort']) => void;
+  onSort: (sortBy: DashboardQuery['sortBy']) => void;
   onPageChange: (page: number) => void;
   onDelete: (id: string) => Promise<void>;
   onRegenerate: (id: string) => Promise<void>;
@@ -57,6 +65,7 @@ export const URLTable: React.FC<URLTableProps> = ({
   const [selectedUrls, setSelectedUrls] = useState<string[]>([]);
   const [isSelectAllChecked, setIsSelectAllChecked] = useState<boolean>(false);
   const [bulkActionLoading, setBulkActionLoading] = useState<string | null>(null);
+  const [bulkRegenerateDialogOpen, setBulkRegenerateDialogOpen] = useState<boolean>(false);
 
   const urls = data?.urls || [];
 
@@ -91,11 +100,11 @@ export const URLTable: React.FC<URLTableProps> = ({
   };
 
   const getSortIcon = (column: string): React.ReactNode => {
-    if (query.sort !== column) return null;
-    return query.order === 'desc' ? <SortDesc size={16} /> : <SortAsc size={16} />;
+    if (query.sortBy !== column) return null;
+    return query.sortOrder === 'desc' ? <SortDesc size={16} /> : <SortAsc size={16} />;
   };
 
-  const SortableHeader: React.FC<{ column: DashboardQuery['sort']; children: React.ReactNode }> = ({ 
+  const SortableHeader: React.FC<{ column: DashboardQuery['sortBy']; children: React.ReactNode }> = ({ 
     column, 
     children 
   }) => (
@@ -110,7 +119,7 @@ export const URLTable: React.FC<URLTableProps> = ({
     </TableHead>
   );
 
-  // ✅ Enhanced Bulk Actions with loading states
+  // Bulk Actions with loading states
   const handleBulkDelete = async (): Promise<void> => {    
     if (!onBulkDelete || selectedUrls.length === 0) return;
 
@@ -131,18 +140,17 @@ export const URLTable: React.FC<URLTableProps> = ({
     }
   };
 
-  const handleBulkRegenerate = async (): Promise<void> => {
+  const handleBulkRegenerate = (): void => {
     if (!onBulkRegenerate || selectedUrls.length === 0) return;
+    setBulkRegenerateDialogOpen(true);
+  };
 
-    const confirmed = window.confirm(
-      `Are you sure you want to regenerate ${selectedUrls.length} selected URL${selectedUrls.length > 1 ? 's' : ''}? This will create new short codes.`
-    );
-    
-    if (!confirmed) return;
-
+  const confirmBulkRegenerate = async (): Promise<void> => {
+    if (!onBulkRegenerate) return;
     setBulkActionLoading('regenerate');
     try {
       await onBulkRegenerate(selectedUrls);
+      setBulkRegenerateDialogOpen(false);
       clearSelection();
     } catch (error) {
       console.error('Bulk regenerate failed:', error);
@@ -151,7 +159,7 @@ export const URLTable: React.FC<URLTableProps> = ({
     }
   };
 
-  // ✅ Calculate stats for selected URLs
+  // Calculate stats for selected URLs
   const selectedStats: SelectedStats = {
     total: selectedUrls.length,
     active: selectedUrls.filter(id => {
@@ -168,13 +176,13 @@ export const URLTable: React.FC<URLTableProps> = ({
     }).length,
   };
 
-  // ✅ Empty state with URL limit awareness
+  // Empty state with URL limit awareness
   if (!data || urls.length === 0) {
     return (
       <Card className="border-2 border-dashed border-gray-300 hover:border-gray-400 transition-colors shadow-md">
         <CardContent className="p-16 text-center">
           <div className="flex flex-col items-center space-y-6">
-            <div className="h-24 w-24 rounded-full bg-gradient-to-r from-gray-100 to-gray-200 flex items-center justify-center shadow-inner">
+            <div className="h-24 w-24 rounded-full bg-blue-100 flex items-center justify-center shadow-inner">
               <Link2 className="h-12 w-12 text-gray-400" />
             </div>
             <div className="space-y-3">
@@ -218,7 +226,7 @@ export const URLTable: React.FC<URLTableProps> = ({
     <div className="space-y-6">
       {/* Bulk Actions Bar */}
       {selectedUrls.length > 0 && (
-        <Card className="border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 shadow-md">
+        <Card className="border-blue-200 bg-white shadow-md">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
@@ -467,6 +475,44 @@ export const URLTable: React.FC<URLTableProps> = ({
           )}
         </CardContent>
       </Card>
+    <Dialog open={bulkRegenerateDialogOpen} onOpenChange={setBulkRegenerateDialogOpen}>
+      <DialogContent className="sm:max-w-md" showCloseButton={false}>
+        <DialogHeader>
+          <div className="flex items-center gap-3 mb-1">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100">
+              <AlertTriangle className="h-5 w-5 text-amber-600" />
+            </div>
+            <DialogTitle>
+              Regenerate {selectedUrls.length} URL{selectedUrls.length > 1 ? 's' : ''}?
+            </DialogTitle>
+          </div>
+          <DialogDescription>
+            New short codes will be created for all selected links. Anyone using the old short URLs will receive a 404.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => setBulkRegenerateDialogOpen(false)}
+            disabled={bulkActionLoading === 'regenerate'}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={confirmBulkRegenerate}
+            disabled={bulkActionLoading === 'regenerate'}
+            className="bg-amber-500 hover:bg-amber-600 text-white"
+          >
+            {bulkActionLoading === 'regenerate' ? (
+              <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
+            Regenerate
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     </div>
   );
 };
