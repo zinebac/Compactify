@@ -23,11 +23,17 @@ import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/contexts/AuthContext';
 
 export const Auth: React.FC = () => {
-	const { login, isLoading } = useAuth();
+	const { login, isLoading, isAuthenticated } = useAuth();
 	const [error, setError] = useState<string | null>(null);
 	const [authStep, setAuthStep] = useState<'idle' | 'authenticating' | 'success'>('idle');
 	const [dots, setDots] = useState('');
 	const navigate = useNavigate();
+
+	useEffect(() => {
+		if (!isLoading && isAuthenticated) {
+			navigate('/dashboard');
+		}
+	}, [isAuthenticated, isLoading, navigate]);
 
 	// Animated dots for loading
 	useEffect(() => {
