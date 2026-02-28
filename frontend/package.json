@@ -2,6 +2,15 @@
   "name": "frontend",
   "private": true,
   "version": "0.0.0",
+  "description": "React + Vite frontend for Compactify with OAuth login and URL analytics dashboard.",
+  "keywords": [
+    "compactify",
+    "react",
+    "vite",
+    "url-shortener",
+    "dashboard",
+    "oauth"
+  ],
   "type": "module",
   "scripts": {
     "dev": "vite",

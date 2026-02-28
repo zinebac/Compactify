@@ -1,10 +1,19 @@
 {
   "name": "backend",
   "version": "0.0.1",
-  "description": "",
+  "description": "NestJS API for Compactify URL shortener with OAuth, JWT auth, analytics, and Prisma/PostgreSQL.",
   "author": "",
   "private": true,
-  "license": "UNLICENSED",
+  "license": "MIT",
+  "keywords": [
+    "compactify",
+    "nestjs",
+    "url-shortener",
+    "oauth",
+    "jwt",
+    "prisma",
+    "postgresql"
+  ],
   "scripts": {
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
