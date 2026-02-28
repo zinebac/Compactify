@@ -147,7 +147,7 @@ export class AuthController {
 	private generateSuccessHTML(authData: any): string {
 		const safePayload = JSON.stringify({ accessToken: authData.accessToken, user: authData.user })
 			.replace(/</g, '\\u003c');
-		const safeFrontendUrl = JSON.stringify(process.env.FRONTEND_URL);
+		const safeFrontendUrl = JSON.stringify(process.env.FRONTEND_URL?.replace(/\/$/, ''));
 		return `
 			<!DOCTYPE html>
 			<html>
@@ -177,7 +177,7 @@ export class AuthController {
 
 	private generateErrorHTML(error: string): string {
 		const safeErrorJson = JSON.stringify(error).replace(/</g, '\\u003c');
-		const safeFrontendUrl = JSON.stringify(process.env.FRONTEND_URL);
+		const safeFrontendUrl = JSON.stringify(process.env.FRONTEND_URL?.replace(/\/$/, ''));
 		return `
 			<!DOCTYPE html>
 			<html>

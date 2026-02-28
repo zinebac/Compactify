@@ -14,7 +14,7 @@ const URL_CONFIG = {
 	SHORT_CODE_LENGTH: parseInt(process.env.URL_SHORT_CODE_LENGTH) || 8,
 	MAX_RETRIES: parseInt(process.env.URL_GENERATION_MAX_RETRIES) || 5,
 	MAX_URL_LENGTH: parseInt(process.env.MAX_URL_LENGTH) || 2048,
-	BASE_URL: process.env.BACKEND_URL,
+	BASE_URL: process.env.BACKEND_URL?.replace(/\/$/, ''),
 };
 
 // custom exception for URL validation
@@ -121,7 +121,7 @@ export class UrlService {
 				},
 			});
 	
-			const shortenedUrl = `${process.env.BACKEND_URL}/url/${shortCode}`;
+			const shortenedUrl = `${URL_CONFIG.BASE_URL}/url/${shortCode}`;
 			const response = {
 				originalUrl: urlData.originalUrl,
 				shortenedUrl: shortenedUrl,
@@ -204,7 +204,7 @@ export class UrlService {
 				},
 			});
 
-			const shortenedUrl = `${process.env.BACKEND_URL}/url/${shortCode}`;
+			const shortenedUrl = `${URL_CONFIG.BASE_URL}/url/${shortCode}`;
 
 			const response = {
 				originalUrl: urlData.originalUrl,
@@ -357,7 +357,7 @@ export class UrlService {
 			}
 
 			return {
-				shortenedUrl: `${process.env.BACKEND_URL}/url/${newShortCode}`,
+				shortenedUrl: `${URL_CONFIG.BASE_URL}/url/${newShortCode}`,
 				id: updatedUrl.id,
 			};
 		} catch(error) {
