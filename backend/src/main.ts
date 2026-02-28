@@ -6,13 +6,12 @@ import { ValidationPipe } from '@nestjs/common';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-
   const allowedOrigins = [
     // Local dev (Vite)
     'http://localhost:5173',
     // Docker nginx — browsers send port-80 origins without the port number
     'http://localhost',
-    process.env.FRONTEND_URL,
+    process.env.FRONTEND_URL?.replace(/\/$/, ''),
   ].filter(Boolean) as string[];
 
   app.enableCors({
